@@ -1,0 +1,17 @@
+{
+  "application_version": "0.2.0",
+  "catalog_format_version": 1,
+  "observed_format_version": 1,
+  "minimum_client_version": "0.1.0",
+  "minimum_sqlite_version": "3.35.0",
+  "release_url": "https://github.com/TheDancingDeveloper-org/cadastre/releases",
+  "rollback": "Restore a verified backup when the previous application cannot read the new schema.",
+  "release_artifacts": [
+    "oci-image-digest",
+    "python-package",
+    "sbom",
+    "signature",
+    "build-provenance",
+    "release-test-report"
+  ]
+}

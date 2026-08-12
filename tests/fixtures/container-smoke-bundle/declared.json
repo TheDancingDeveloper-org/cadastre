@@ -1,0 +1,10 @@
+{
+  "network": [
+    {
+      "class": "private",
+      "id": "container-smoke-network",
+      "notes": "Container lifecycle smoke fixture.",
+      "tags": ["smoke"]
+    }
+  ]
+}

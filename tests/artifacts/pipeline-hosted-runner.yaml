@@ -1,0 +1,11 @@
+# Policy requires self-hosted execution; this selects GitHub's hosted pool.
+name: Build
+"on": [push]
+x-cadastre:
+  system: ci-selfhosted
+  repo: notes-api-repo
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build

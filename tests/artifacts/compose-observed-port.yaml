@@ -1,0 +1,7 @@
+x-cadastre:
+  host: app-01
+  expose: internal
+services:
+  reports:
+    image: example.invalid/reports:1
+    ports: ["9090:8080"]

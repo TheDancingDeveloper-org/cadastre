@@ -1,0 +1,17 @@
+[Unit]
+Description=Cadastre — collect observed evidence hourly
+
+[Timer]
+# Hourly, because the default freshness threshold is 24h (D4) and the tightest
+# per-capability threshold in the sample config is 15 minutes for ci.status.
+# A source collected less often than its threshold renders as STALE by design —
+# match this interval to the tightest threshold you actually care about.
+OnCalendar=hourly
+
+# Spread the load off the top of the hour, and catch up after a reboot rather
+# than waiting for the next slot.
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

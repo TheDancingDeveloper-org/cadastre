@@ -1,0 +1,52 @@
+{
+  // Renovate configuration for a digest-pinned Cadastre deployment.
+  //
+  // Copy into the repository that holds your deployment (the ops repo, not this
+  // one) as `renovate.json5`. The project recommends pinning image digests;
+  // this makes that pin mechanically updatable instead of a manual chore.
+  //
+  // Releases publish `X.Y.Z`, `X.Y`, and `latest` as aliases of the immutable
+  // `sha-<commit>` tag, all pointing at the same signed digest. Renovate tracks
+  // the semver alias and writes back the digest, so what is deployed stays a
+  // digest while what is *watched* is a version.
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['config:recommended'],
+
+  // Never take a floating tag into a deployment reference.
+  packageRules: [
+    {
+      matchPackageNames: [
+        'ghcr.io/**/cadastre',
+        'ghcr.io/**/cadastre-gui',
+      ],
+      pinDigests: true,
+      // Backend and GUI are released together from one pipeline run; updating
+      // one without the other deploys a mismatched stack.
+      groupName: 'cadastre stack',
+    },
+  ],
+
+  // `compose.production.yaml` writes its images as `${VAR:-<default>}`, which
+  // the built-in docker-compose manager does not read. Match the default
+  // explicitly, and match a `.env` override if you keep one.
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)compose\\.production\\.ya?ml$/'],
+      matchStrings: [
+        'image:\\s*\\$\\{[A-Z_]+:-(?<depName>[^:@\\s}]+)(:(?<currentValue>[^@\\s}]+))?(@(?<currentDigest>sha256:[0-9a-f]+))?\\}',
+      ],
+      datasourceTemplate: 'docker',
+      versioningTemplate: 'semver',
+    },
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)\\.env$/', '/(^|/)cadastre\\.env$/'],
+      matchStrings: [
+        'CADASTRE_(GUI_)?IMAGE=(?<depName>[^:@\\s]+)(:(?<currentValue>[^@\\s]+))?(@(?<currentDigest>sha256:[0-9a-f]+))?',
+      ],
+      datasourceTemplate: 'docker',
+      versioningTemplate: 'semver',
+    },
+  ],
+}

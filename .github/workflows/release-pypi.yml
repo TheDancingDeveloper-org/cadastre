@@ -1,0 +1,56 @@
+name: Release to PyPI
+
+# Gated on a version tag, and only a version tag: pushing to main never
+# reaches this workflow (see publish.yml's own header for why an ungated
+# publish path is explicitly not wanted here). The tag must equal `v` +
+# the version declared in pyproject.toml/__init__.py, or the release fails
+# before anything is built.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    # Nothing here needs a Docker daemon, so this takes the general pool rather
+    # than restricting itself to the two `publish` workers. No GitHub-hosted
+    # runner may build a release artifact; this workflow is tag-gated.
+    runs-on: [self-hosted, node-b, linux, x64, rust]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Verify tag matches the declared version
+        run: |
+          set -eu
+          declared="v$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/cadastre/__init__.py)"
+          tag="${GITHUB_REF_NAME}"
+          if [ "$tag" != "$declared" ]; then
+            echo "tag $tag does not match declared version $declared" >&2
+            exit 1
+          fi
+
+      - run: uv sync --extra dev --extra mcp-server
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run mypy
+      - run: uv run pytest -q
+      - run: uv run cadastre --catalog examples/catalog schema > /tmp/schema.json
+      - run: diff -u schema/catalog.schema.json /tmp/schema.json
+
+      - name: Build
+        run: uv build --out-dir dist
+
+      - name: Publish to PyPI
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        # --check-url makes a re-run of the same tag a no-op instead of a hard
+        # failure on PyPI's immutable index. Without it, any reason to re-point
+        # a release tag (a broken action pin, a failed image build) turns the
+        # already-successful publish into a red run that hides the real one.
+        run: uv publish --check-url https://pypi.org/simple/

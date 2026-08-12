@@ -1,0 +1,17 @@
+- id: edge-a
+  notes: Apex record pointing at the edge host.
+  zone: example.invalid
+  name: edge.example.invalid
+  type: A
+  value: 203.0.113.10
+  resolves_to: ingress-https
+- id: forge-cname
+  zone: example.invalid
+  name: forge.example.invalid
+  type: CNAME
+  value: edge.example.invalid
+- id: notes-cname
+  zone: example.invalid
+  name: notes.example.invalid
+  type: CNAME
+  value: edge.example.invalid

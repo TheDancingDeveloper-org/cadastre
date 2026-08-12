@@ -1,0 +1,11 @@
+# No declared executor carries all three labels: `windows` exists nowhere.
+name: Build
+"on": [push]
+x-cadastre:
+  system: ci-selfhosted
+  repo: notes-api-repo
+jobs:
+  build:
+    runs-on: [self-hosted, windows, build]
+    steps:
+      - run: echo build

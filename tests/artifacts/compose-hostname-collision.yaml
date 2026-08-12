@@ -1,0 +1,8 @@
+x-cadastre:
+  host: app-01
+  expose: internal
+services:
+  reports:
+    image: example.invalid/reports:1.0
+    x-cadastre:
+      hostnames: [notes.internal.example.invalid]

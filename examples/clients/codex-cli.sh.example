@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Run once from the operator's environment. `codex mcp add` stores the
+# non-secret endpoint and protected token-file path in Codex configuration.
+# The token value is never placed in this command or in argv.
+codex mcp add cadastre \
+  --env CADASTRE_MCP_URL=https://cadastre.example.invalid/mcp \
+  --env CADASTRE_REMOTE_ONLY=1 \
+  --env CADASTRE_HTTP_TOKEN_FILE=/run/secrets/cadastre-http-token \
+  -- cadastre-mcp-remote

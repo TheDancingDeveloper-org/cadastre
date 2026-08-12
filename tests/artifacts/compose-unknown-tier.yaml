@@ -1,0 +1,6 @@
+x-cadastre:
+  host: app-01
+  expose: dmz
+services:
+  reports:
+    image: example.invalid/reports:1.0

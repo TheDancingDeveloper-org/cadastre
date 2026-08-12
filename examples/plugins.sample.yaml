@@ -1,0 +1,261 @@
+# Sample plugin configuration. Copy into the initialized Cadastre data
+# directory as `plugins.yaml`. See `BUILTIN_PLUGINS.md` for every key,
+# upstream read scope, output shape, limits, and troubleshooting.
+#
+# Safe in a public repository by construction: it names the *environment
+# variable* a credential arrives in, never the credential. `params` may be
+# logged; `config` names the variable and nothing more.
+#
+# Collectors run on the collector host, never the agent box. The agent box
+# needs only an authenticated Cadastre interface.
+
+# Per-capability freshness thresholds (D4). A hardware inventory tolerates
+# days; a port map does not.
+freshness:
+  default: 86400
+  dns.records: 3600
+  endpoint.list: 3600
+  ci.status: 900
+
+# Optional Manifest activation is a separate modules.yaml. Installing the
+# extra alone never enables the module.
+# modules:
+#   manifest:
+#     enabled: true
+
+sources:
+  # 1. The bootstrap source: reads catalog intent and always answers.
+  - id: static
+    plugin: static
+    command: [cadastre-plugin-static]
+    methods: [inventory.list, network.list, endpoint.list, secret.list]
+    config:
+      catalog: .
+
+  # Migration aid; retire after source-line reconciliation and deletion.
+  # - id: work-markdown
+  #   plugin: work-markdown
+  #   command: [cadastre-plugin-work-markdown]
+  #   methods: [work.findings]
+  #   config: {repo: project-a, root: /workspace/project-a, files: [TODO.md, PLAN.md]}
+
+  # Checkout liveness; repo must match a declared repo id.
+  # - id: work-git
+  #   plugin: work-git
+  #   command: [cadastre-plugin-work-git]
+  #   methods: [work.repo-state]
+  #   config:
+  #     checkouts: [{id: project-a-main, repo: project-a, path: /workspace/project-a}]
+
+  # 2. Ingress. Build this first — the admin API returns the full running
+  #    config as JSON, and it unblocks hostname-collision checking.
+  - id: ingress
+    plugin: ingress-caddy
+    command: [cadastre-plugin-ingress-caddy]
+    methods: [endpoint.list]
+    config:
+      endpoint: http://127.0.0.1:2019
+      network: edge-net
+      ingress_service: ingress
+
+  # 3. Self-hosted forge: the origin side of every dual-homed repo.
+  - id: forge-selfhosted
+    plugin: forge-forgejo
+    command: [cadastre-plugin-forge-forgejo]
+    methods: [vcs.repos, secret.list]
+    config:
+      endpoint: https://forge.example.invalid
+      token_env: CADASTRE_P_FORGE_TOKEN
+      forge: forge-selfhosted
+      mirror_to: forge-public
+      org: apps
+      store: forge-secrets
+
+  # 4. Public forge: the mirror side, plus Actions workflows.
+  - id: forge-public
+    plugin: forge-github
+    command: [cadastre-plugin-forge-github]
+    methods: [vcs.repos, ci.pipelines]
+    config:
+      endpoint: https://api.github.com
+      token_env: CADASTRE_P_GITHUB_TOKEN
+      org: example
+
+  # 4b. Self-hosted runner inventory, as its own source. Two reasons it is not
+  #     another method on the source above: a source takes its TTL from its
+  #     first collected method, so runner status would inherit a daily
+  #     freshness; and one organisation per source keeps provenance and
+  #     authorisation scope separate. Add a second source for a second
+  #     organisation rather than merging them. The token is a *separate*,
+  #     narrower credential: organisation `Self-hosted runners: read`.
+  #
+  #     Read-only inventory. It cannot register, remove, relabel, or run
+  #     anything, and nothing it reports places a runner on a Cadastre host.
+  - id: github-runners-example
+    plugin: forge-github
+    command: [cadastre-plugin-forge-github]
+    methods: [ci.status]
+    timeout_seconds: 30
+    config:
+      endpoint: https://api.github.com
+      token_env: CADASTRE_P_GITHUB_RUNNERS_TOKEN
+      org: example
+
+  # 4c. Workflow routing and utilisation. Separate again, because it needs
+  #     repository permissions the runner source does not have: `Actions: read`
+  #     for job history, and `Contents: read` for selector parsing.
+  #
+  #     Both optional sections are off unless configured. Job history requires
+  #     an explicit repository list: enumerating an organisation's runs is a
+  #     lot of upstream traffic to start doing because a flag was set.
+  - id: github-workflows
+    plugin: forge-github
+    command: [cadastre-plugin-forge-github]
+    methods: [ci.pipelines]
+    config:
+      endpoint: https://api.github.com
+      token_env: CADASTRE_P_GITHUB_WORKFLOWS_TOKEN
+      org: example
+      workflow_selectors: true
+      job_history:
+        repositories: [example/notes-api]
+        lookback_hours: 24
+        max_runs: 50
+
+  # 5. Self-hosted CI, and its own secret store.
+  - id: ci-selfhosted
+    plugin: ci-woodpecker
+    command: [cadastre-plugin-ci-woodpecker]
+    methods: [ci.pipelines, secret.list]
+    config:
+      endpoint: https://ci.example.invalid
+      token_env: CADASTRE_P_CI_TOKEN
+      store: ci-store
+
+  # 6. Secret manager. Names and existence only.
+  #
+  #    ONE SOURCE PER PROJECT, and give each its own `store` id. A source's
+  #    absence is only evidence inside its own store: the collector reports
+  #    `coverage: {secret: {where: {store: <this store>}}}` for itself, so a
+  #    secret declared in `secrets-cicd` is never reported `missing` from
+  #    `secrets-apps`. Two projects sharing one `store` id would collapse that
+  #    boundary and each would claim the other's secrets are absent.
+  #
+  #    The `store` id here must equal the `store` on the matching entries in
+  #    `declared/secrets/`. A bare vendor name declared against a qualified
+  #    one ('infisical' vs 'infisical:cicd') is a permanent `differs` row.
+  - id: secrets-cicd
+    plugin: secrets-infisical
+    command: [cadastre-plugin-secrets-infisical]
+    methods: [secret.list]
+    config:
+      endpoint: https://secrets.example.invalid
+      token_env: CADASTRE_P_SECRETS_TOKEN
+      workspace_id: replace-me
+      environment: prod
+      store: infisical:cicd
+      ref_prefix: "infisical://cicd/"
+
+  - id: secrets-apps
+    plugin: secrets-infisical
+    command: [cadastre-plugin-secrets-infisical]
+    methods: [secret.list]
+    config:
+      endpoint: https://secrets.example.invalid
+      token_env: CADASTRE_P_SECRETS_TOKEN
+      workspace_id: replace-me-too
+      environment: prod
+      store: infisical:apps
+      ref_prefix: "infisical://apps/"
+
+  # 7. The GitOps controller's desired-state repo, read from a local checkout.
+  #    D2: this is observed evidence. It is another system's desired state, not
+  #    ours.
+  - id: orchestrator
+    plugin: orchestrator-gitops
+    command: [cadastre-plugin-orchestrator-gitops]
+    methods: [inventory.list]
+    config:
+      path: /srv/ops-repo
+      repo: ops-repo
+
+  # 8. DNS. The largest blind spot, and the highest-value read-only credential
+  #    to create for this project.
+  #
+  #    A token that can see fewer zones than the catalog declares is the norm,
+  #    not an error. The collector reports coverage for the zones it actually
+  #    enumerated, so records in zones it never read stay unreported rather
+  #    than turning into `missing` rows. `coverage:` below is the operator
+  #    override — it can only NARROW what the collector already claims, never
+  #    broaden it, and is only needed to scope a source more tightly than the
+  #    credential already does.
+  - id: dns
+    plugin: dns-cloudflare
+    command: [cadastre-plugin-dns-cloudflare]
+    methods: [dns.records]
+    config:
+      token_env: CADASTRE_P_DNS_TOKEN
+      zones: [example.invalid]
+    coverage:
+      domain:
+        where:
+          zone: [example.invalid]
+
+  # 9. VPN membership.
+  - id: vpn
+    plugin: vpn-tailscale
+    command: [cadastre-plugin-vpn-tailscale]
+    methods: [network.list]
+    config:
+      token_env: CADASTRE_P_VPN_TOKEN
+      tailnet: example.invalid
+      network: vpn-0
+
+  # 10. Hypervisor facts.
+  #
+  #     `verify_tls: false` because Proxmox ships a self-signed certificate;
+  #     without it the collector reports `unreachable`, which reads as "the
+  #     host is down" rather than "I refused its certificate". It is a real
+  #     protection turned off -- acceptable for a read-only collector on a LAN,
+  #     and still the weaker option. Installing a CA-signed certificate on the
+  #     node, or trusting its CA here, is better.
+  #
+  #     CADASTRE_P_PVE_TOKEN holds the token value alone -- `user@realm!id=uuid`.
+  #     The `PVEAPIToken=` prefix is `auth_scheme` and takes no trailing space.
+  - id: hypervisor
+    plugin: hypervisor-proxmox
+    command: [cadastre-plugin-hypervisor-proxmox]
+    methods: [inventory.list]
+    config:
+      endpoint: https://hv-01.example.invalid:8006
+      token_env: CADASTRE_P_PVE_TOKEN
+      auth_scheme: "PVEAPIToken="
+      verify_tls: false
+      hypervisor: hv-01
+      network: lab-net
+
+  # 11. Publish state. No auth.
+  - id: registry
+    plugin: registry-crates
+    command: [cadastre-plugin-registry-crates]
+    methods: [inventory.list]
+    config:
+      crates: [example-crate]
+
+  # 12. The router: no plugin written, and that is the success case. `exec`
+  #     over SSH runs the device's own command and returns JSON. Nothing is
+  #     installed on the router.
+  - id: router
+    plugin: exec
+    command: [cadastre-plugin-exec]
+    methods: [network.list]
+    env: [SSH_AUTH_SOCK]
+    config:
+      shape: raw
+      commands:
+        network.list:
+          - ssh
+          - -o
+          - BatchMode=yes
+          - rtr-01.example.invalid
+          - "show interfaces json"

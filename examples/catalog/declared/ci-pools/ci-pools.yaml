@@ -1,0 +1,19 @@
+- id: build-pool
+  tags:
+    - app-tier
+  notes: 'Routing and access boundary for the self-hosted build executors. Private: only the repositories
+    named below may schedule onto it.'
+  system: ci-selfhosted
+  scope: organization:example
+  visibility: selected
+  public_repositories: false
+  repositories:
+    - notes-api-repo
+    - tagger-repo
+- id: ops-pool
+  notes: Deployment executors. Separated from the build pool so a build cannot schedule onto a runner
+    that holds deployment access.
+  system: ci-selfhosted
+  scope: organization:example
+  visibility: private
+  public_repositories: false

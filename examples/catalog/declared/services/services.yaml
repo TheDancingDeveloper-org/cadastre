@@ -1,0 +1,58 @@
+- id: ci
+  tags:
+    - infrastructure
+  notes: Self-hosted CI. Holds its own secret store.
+  runs_on: app-01
+  expose: internal
+- id: forge
+  tags:
+    - infrastructure
+  notes: Self-hosted VCS. Both a service in the estate and a source Cadastre reads.
+  runs_on: app-01
+  expose: internal
+- id: ingress
+  tags:
+    - infrastructure
+    - ingress
+  notes: Reverse proxy. Everything public is fronted by this.
+  runs_on: edge-01
+  repo: ops-repo
+  expose: public
+  deployed_by:
+    - pipeline: ops-repo-selfhosted
+      authoritative: true
+  consumes_secret:
+    - ingress-acme-token
+- id: notes-api
+  tags:
+    - app-tier
+  notes: Example internal API.
+  runs_on: app-01
+  repo: notes-api-repo
+  expose: internal
+  deployed_by:
+    - pipeline: notes-api-selfhosted
+      authoritative: true
+    - pipeline: notes-api-public
+      authoritative: false
+  consumes_secret:
+    - notes-api-db-password
+- id: notes-db
+  tags:
+    - persistent-data
+  notes: Database for notes-api.
+  runs_on: data-01
+  expose: none
+  consumes_secret:
+    - notes-api-db-password
+- id: tagger
+  tags:
+    - app-tier
+    - gpu
+  notes: Accelerated batch worker. No inbound endpoint.
+  runs_on: app-02
+  repo: tagger-repo
+  expose: none
+  deployed_by:
+    - pipeline: tagger-selfhosted
+      authoritative: true

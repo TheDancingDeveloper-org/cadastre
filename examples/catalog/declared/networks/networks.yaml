@@ -1,0 +1,15 @@
+- id: edge-net
+  tags:
+    - internet-facing
+  notes: The only network with inbound reachability from the public internet.
+  class: public
+- id: lab-net
+  tags:
+    - internal
+  notes: Flat private network behind the router. Most workloads live here.
+  class: private
+- id: mgmt-net
+  tags:
+    - restricted
+  notes: Hypervisor and router management. No workloads.
+  class: private

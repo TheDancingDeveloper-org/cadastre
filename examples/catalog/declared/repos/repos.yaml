@@ -1,0 +1,29 @@
+- id: notes-api-repo
+  tags:
+    - app-tier
+  notes: Dual-homed, and carries pipelines for both CI systems.
+  remotes:
+    - forge: forge-selfhosted
+      url: https://forge.example.invalid/apps/notes-api.git
+      role: origin
+    - forge: forge-public
+      url: https://public.example.invalid/example/notes-api.git
+      role: mirror
+  mirror_from: forge-selfhosted
+  mirror_to: forge-public
+- id: ops-repo
+  tags:
+    - infrastructure
+  notes: Desired state for the GitOps controller. Not Cadastre's to reconcile.
+  remotes:
+    - forge: forge-selfhosted
+      url: https://forge.example.invalid/ops/ops-repo.git
+      role: origin
+  mirror_to: forge-public
+- id: tagger-repo
+  tags:
+    - app-tier
+  remotes:
+    - forge: forge-selfhosted
+      url: https://forge.example.invalid/apps/tagger.git
+      role: origin

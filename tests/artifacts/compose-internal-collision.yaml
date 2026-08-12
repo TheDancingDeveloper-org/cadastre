@@ -1,0 +1,14 @@
+x-cadastre:
+  host: app-01
+  expose: internal
+services:
+  first:
+    image: example.invalid/first:1
+    ports: ["8123:8080"]
+    x-cadastre:
+      hostnames: [same.internal.example.invalid]
+  second:
+    image: example.invalid/second:1
+    ports: ["8123:8080"]
+    x-cadastre:
+      hostnames: [same.internal.example.invalid]

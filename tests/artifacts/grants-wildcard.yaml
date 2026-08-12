@@ -1,0 +1,7 @@
+grants:
+- id: g-999
+  principal: agent
+  role: admin
+  targets: ["*"]
+  actions: ["*"]
+  ttl: 1h

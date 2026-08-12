@@ -1,0 +1,993 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cadastre.invalid/schema/catalog.schema.json",
+  "title": "Cadastre catalog",
+  "description": "Entities in declared/. One file per kind-directory, each holding a list of entities of that kind.",
+  "$defs": {
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "workstation",
+            "server",
+            "hypervisor",
+            "container-host",
+            "appliance",
+            "router",
+            "edge"
+          ]
+        },
+        "hosted_in": {
+          "type": "string",
+          "x-cadastre-ref": "host",
+          "description": "The hypervisor or container host this runs on."
+        },
+        "reachable_from": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "x-cadastre-ref": "network"
+          }
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpu_cores": {
+              "type": "integer"
+            },
+            "memory_gb": {
+              "type": "integer"
+            },
+            "disk_gb": {
+              "type": "integer"
+            },
+            "gpu": {
+              "type": "string",
+              "description": "Model string, or absent."
+            }
+          }
+        },
+        "access": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "shell",
+                  "api"
+                ]
+              },
+              "via": {
+                "type": "string",
+                "description": "Broker backend id."
+              },
+              "role": {
+                "type": "string",
+                "description": "What the broker mints."
+              },
+              "reachable_from": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "x-cadastre-ref": "network"
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "via",
+              "role"
+            ]
+          }
+        }
+      },
+      "required": [
+        "id",
+        "role"
+      ],
+      "title": "host",
+      "description": "Anything that can run something."
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "class": {
+          "type": "string",
+          "enum": [
+            "private",
+            "public",
+            "mixed"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "class"
+      ],
+      "title": "network",
+      "description": "A reachability domain with a class."
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "runs_on": {
+          "type": "string",
+          "x-cadastre-ref": "host"
+        },
+        "repo": {
+          "type": "string",
+          "x-cadastre-ref": "repo"
+        },
+        "expose": {
+          "type": "string",
+          "description": "An exposure tier name from declared/policy/exposure.yaml."
+        },
+        "deployed_by": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "pipeline": {
+                "type": "string",
+                "x-cadastre-ref": "pipeline"
+              },
+              "authoritative": {
+                "type": "boolean",
+                "description": "Which pipeline actually deploys. Not inferable; declared."
+              }
+            },
+            "required": [
+              "pipeline"
+            ]
+          }
+        },
+        "consumes_secret": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "x-cadastre-ref": "secret"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "runs_on"
+      ],
+      "title": "service",
+      "description": "A deployed unit of work."
+    },
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "service": {
+          "type": "string",
+          "x-cadastre-ref": "service"
+        },
+        "network": {
+          "type": "string",
+          "x-cadastre-ref": "network"
+        },
+        "address": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "http",
+            "https",
+            "tcp",
+            "udp",
+            "ssh",
+            "grpc"
+          ]
+        },
+        "host": {
+          "type": "string",
+          "x-cadastre-ref": "host",
+          "description": "Host on which this endpoint is observed bound."
+        },
+        "bind_address": {
+          "type": "string",
+          "description": "Listener bind address, distinct from the route address."
+        },
+        "fronted_by": {
+          "type": "string",
+          "x-cadastre-ref": "service",
+          "description": "The ingress service in front of this endpoint."
+        }
+      },
+      "required": [
+        "id",
+        "network",
+        "address"
+      ],
+      "title": "endpoint",
+      "description": "An address a service is reachable at, within some network."
+    },
+    "domain": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "zone": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "A",
+            "AAAA",
+            "CNAME",
+            "TXT",
+            "MX",
+            "SRV",
+            "NS"
+          ]
+        },
+        "value": {
+          "type": "string"
+        },
+        "resolves_to": {
+          "type": "string",
+          "x-cadastre-ref": "endpoint"
+        }
+      },
+      "required": [
+        "id",
+        "zone",
+        "name",
+        "type"
+      ],
+      "title": "domain",
+      "description": "A DNS record."
+    },
+    "secret": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Opaque path or name."
+        },
+        "store": {
+          "type": "string",
+          "description": "Secret store id."
+        },
+        "last_rotated": {
+          "type": "string",
+          "description": "RFC 3339 date or datetime."
+        }
+      },
+      "required": [
+        "id",
+        "ref",
+        "store"
+      ],
+      "title": "secret",
+      "description": "A reference. Never a value."
+    },
+    "pipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "repo": {
+          "type": "string",
+          "x-cadastre-ref": "repo"
+        },
+        "system": {
+          "type": "string",
+          "description": "CI system id."
+        },
+        "file": {
+          "type": "string",
+          "description": "Path within the repo."
+        },
+        "deploys": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "x-cadastre-ref": "service"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "repo",
+        "system"
+      ],
+      "title": "pipeline",
+      "description": "A CI definition that deploys some class of thing."
+    },
+    "repo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "remotes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "forge": {
+                "type": "string",
+                "description": "Forge id, not a vendor."
+              },
+              "url": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "origin",
+                  "mirror"
+                ],
+                "description": "Default origin."
+              }
+            },
+            "required": [
+              "forge",
+              "url"
+            ]
+          },
+          "description": "Dual-homing is the norm, not an edge case."
+        },
+        "mirror_from": {
+          "type": "string",
+          "description": "Forge id mirrored from."
+        },
+        "mirror_to": {
+          "type": "string",
+          "description": "Forge id mirrored to."
+        }
+      },
+      "required": [
+        "id",
+        "remotes"
+      ],
+      "title": "repo",
+      "description": "A VCS repository, and everywhere it lives."
+    },
+    "ci_executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "system": {
+          "type": "string",
+          "description": "CI system id."
+        },
+        "scope": {
+          "type": "string",
+          "description": "The routing and authorization scope it registered in."
+        },
+        "pool": {
+          "type": "string",
+          "x-cadastre-ref": "ci_pool"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "online",
+            "offline",
+            "unknown"
+          ],
+          "description": "As reported upstream. Unknown stays unknown."
+        },
+        "busy": {
+          "type": "boolean",
+          "description": "A snapshot, never spare capacity."
+        },
+        "ephemeral": {
+          "type": "boolean"
+        },
+        "os": {
+          "type": "string"
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "selectors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Routing labels a pipeline may select on."
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Declared toolchains. Never inferred from OS or labels."
+        },
+        "runs_on": {
+          "type": "string",
+          "x-cadastre-ref": "host",
+          "description": "Declared placement. Never inferred from registration."
+        }
+      },
+      "required": [
+        "id",
+        "system"
+      ],
+      "title": "ci_executor",
+      "description": "A registration a CI system may schedule work onto."
+    },
+    "ci_pool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "system": {
+          "type": "string",
+          "description": "CI system id."
+        },
+        "scope": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "all",
+            "private",
+            "selected"
+          ],
+          "description": "Which repositories may schedule onto it."
+        },
+        "public_repositories": {
+          "type": "boolean",
+          "description": "Whether publicly visible repositories may use it."
+        },
+        "repositories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "x-cadastre-ref": "repo"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "system"
+      ],
+      "title": "ci_pool",
+      "description": "A routing and access boundary containing executors."
+    },
+    "deployment_topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors. Grants and placement filter on these."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free text. Rendered as inert data."
+        },
+        "repo": {
+          "type": "string",
+          "x-cadastre-ref": "repo"
+        },
+        "path_pattern": {
+          "type": "string"
+        },
+        "pipeline": {
+          "type": "string",
+          "x-cadastre-ref": "pipeline"
+        },
+        "produces": {
+          "type": "string"
+        },
+        "registry": {
+          "type": "string"
+        },
+        "target_kind": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string",
+          "x-cadastre-ref": "host"
+        },
+        "artifact": {
+          "type": "string",
+          "enum": [
+            "compose",
+            "image",
+            "package"
+          ]
+        },
+        "exposure": {
+          "type": "string"
+        },
+        "hostname_pattern": {
+          "type": "string"
+        },
+        "secret_ref_format": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "repo",
+        "path_pattern",
+        "pipeline",
+        "produces",
+        "registry",
+        "target_kind",
+        "target",
+        "artifact"
+      ],
+      "title": "deployment_topology",
+      "description": "A repeatable path from repository to running workload."
+    },
+    "exposure_tier": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "network_class": {
+          "type": "string",
+          "enum": [
+            "private",
+            "public",
+            "mixed"
+          ]
+        },
+        "network": {
+          "type": "string",
+          "description": "Exact required reachability domain."
+        },
+        "requires_ingress": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "network_class"
+      ]
+    },
+    "conventions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host_name": {
+          "type": "string",
+          "description": "Regex."
+        },
+        "service_name": {
+          "type": "string",
+          "description": "Regex."
+        },
+        "secret_ref": {
+          "type": "string",
+          "description": "Regex."
+        },
+        "endpoint_address": {
+          "type": "string",
+          "description": "Regex."
+        }
+      }
+    },
+    "grant": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "principal": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectors: tag:x, host id, or *."
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Explicit deny beats explicit allow."
+        },
+        "ttl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "principal",
+        "role"
+      ]
+    },
+    "known_undeclared": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "source",
+        "kind",
+        "reason"
+      ]
+    },
+    "replication_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Source secret store id."
+        },
+        "target": {
+          "type": "string",
+          "description": "Target secret store id."
+        },
+        "selectors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Reference selectors expected in both stores."
+        },
+        "mappings": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Explicit source reference to target reference mappings."
+        }
+      },
+      "required": [
+        "source",
+        "target"
+      ]
+    }
+  },
+  "properties": {
+    "host": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/host"
+      }
+    },
+    "network": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/network"
+      }
+    },
+    "service": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/service"
+      }
+    },
+    "endpoint": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/endpoint"
+      }
+    },
+    "domain": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/domain"
+      }
+    },
+    "secret": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/secret"
+      }
+    },
+    "pipeline": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pipeline"
+      }
+    },
+    "repo": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/repo"
+      }
+    },
+    "ci_executor": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ci_executor"
+      }
+    },
+    "ci_pool": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ci_pool"
+      }
+    },
+    "deployment_topology": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/deployment_topology"
+      }
+    }
+  },
+  "x-cadastre-relations": [
+    {
+      "relation": "runs_on",
+      "from": "service",
+      "field": "runs_on",
+      "to": "host"
+    },
+    {
+      "relation": "hosted_in",
+      "from": "host",
+      "field": "hosted_in",
+      "to": "host"
+    },
+    {
+      "relation": "reachable_from",
+      "from": "host",
+      "field": "reachable_from",
+      "to": "network"
+    },
+    {
+      "relation": "reachable_from",
+      "from": "endpoint",
+      "field": "network",
+      "to": "network"
+    },
+    {
+      "relation": "fronted_by",
+      "from": "endpoint",
+      "field": "fronted_by",
+      "to": "service"
+    },
+    {
+      "relation": "resolves_to",
+      "from": "domain",
+      "field": "resolves_to",
+      "to": "endpoint"
+    },
+    {
+      "relation": "consumes_secret",
+      "from": "service",
+      "field": "consumes_secret",
+      "to": "secret"
+    },
+    {
+      "relation": "deployed_by",
+      "from": "service",
+      "field": "deployed_by",
+      "to": "pipeline"
+    },
+    {
+      "relation": "runs_on",
+      "from": "ci_executor",
+      "field": "runs_on",
+      "to": "host"
+    },
+    {
+      "relation": "pool",
+      "from": "ci_executor",
+      "field": "pool",
+      "to": "ci_pool"
+    },
+    {
+      "relation": "repositories",
+      "from": "ci_pool",
+      "field": "repositories",
+      "to": "repo"
+    }
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

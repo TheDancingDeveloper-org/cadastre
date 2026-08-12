@@ -1,0 +1,18 @@
+# Endpoint contract. This file contains no credentials and is not catalog data.
+# Keep the corresponding token file outside the repository.
+profile: direct-https
+transport: https
+endpoint: https://cadastre.example.invalid/mcp
+server_identity: cadastre.example.invalid
+trust_anchor: /etc/cadastre/ca.pem
+client_identity: scoped-bearer-token
+audience: cadastre
+scopes:
+  - mcp
+  - catalog.read
+allowed_operations:
+  - brief
+  - context-for
+  - lookup
+  - drift
+owner: platform-operations

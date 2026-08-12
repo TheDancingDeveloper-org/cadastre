@@ -1,0 +1,13 @@
+# The selector is an expression. Its value needs runtime context Cadastre does
+# not have, so the routing is indeterminate and needs review rather than a
+# confident answer.
+name: Build
+"on": [push]
+x-cadastre:
+  system: ci-selfhosted
+  repo: notes-api-repo
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - run: echo build

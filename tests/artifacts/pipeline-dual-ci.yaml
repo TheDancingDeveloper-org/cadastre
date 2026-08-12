@@ -1,0 +1,10 @@
+x-cadastre:
+  repo: notes-api-repo
+  system: ci-public
+jobs:
+  deploy:
+    steps:
+      - name: deploy
+        env:
+          TOKEN:
+            from_secret: /prod/notes-api/deploy-token

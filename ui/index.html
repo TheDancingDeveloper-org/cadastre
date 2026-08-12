@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'" />
+    <title>Cadastre</title>
+  </head>
+  <!--
+    runtime-config.js is deliberately not bundled: it carries deployment
+    configuration, so it must be replaceable without rebuilding the image.
+    It lives in public/ so Vite copies it verbatim (a public asset is not
+    parsed or hashed) instead of warning that it cannot bundle it. The GUI
+    container serves a generated one in its place — see Dockerfile.gui's
+    40-cadastre-config.sh hook and the nginx alias in ui/nginx.conf.
+  -->
+  <body><div id="root"></div><script src="/runtime-config.js"></script><script type="module" src="/src/main.tsx"></script></body>
+</html>

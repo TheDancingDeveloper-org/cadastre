@@ -1,0 +1,13 @@
+# The eligible executor declares `docker`, not `rust`. A toolchain is not
+# implied by the OS, by the `build` label, or by a previous successful run.
+name: Build
+"on": [push]
+x-cadastre:
+  system: ci-selfhosted
+  repo: notes-api-repo
+  requires: [rust]
+jobs:
+  build:
+    runs-on: [self-hosted, linux, build]
+    steps:
+      - run: cargo build

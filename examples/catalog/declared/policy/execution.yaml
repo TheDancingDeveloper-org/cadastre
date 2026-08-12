@@ -1,0 +1,15 @@
+# Where CI work may run. Cadastre ships no opinion here — which selectors name
+# a vendor-hosted pool is an estate fact, so it is declared.
+hosted_selectors:
+  - ubuntu-latest
+  - ubuntu-24.04
+  - ubuntu-22.04
+  - windows-latest
+  - macos-latest
+
+# Deployment work must reach a declared executor, not a vendor-hosted pool.
+require_self_hosted: true
+
+# Default-deny. A pool that public repositories may schedule onto is a finding
+# until somebody decides otherwise in writing.
+allow_public_repositories: false

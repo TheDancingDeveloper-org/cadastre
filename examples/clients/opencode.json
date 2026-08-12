@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "cadastre": {
+      "type": "local",
+      "command": ["cadastre-mcp-remote"],
+      "environment": {
+        "CADASTRE_MCP_URL": "{env:CADASTRE_MCP_URL}",
+        "CADASTRE_HTTP_TOKEN_FILE": "{env:CADASTRE_HTTP_TOKEN_FILE}",
+        "CADASTRE_REMOTE_ONLY": "1"
+      }
+    }
+  }
+}

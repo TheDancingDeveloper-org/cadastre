@@ -1,0 +1,57 @@
+- id: build-linux-01
+  tags:
+    - app-tier
+  notes: General build executor. `runs_on` is declared intent — the registration's own metadata cannot
+    establish which host it is.
+  system: ci-selfhosted
+  scope: organization:example
+  pool: build-pool
+  status: online
+  busy: false
+  ephemeral: false
+  os: linux
+  architecture: x86_64
+  version: 2.319.1
+  selectors:
+    - self-hosted
+    - linux
+    - build
+  capabilities:
+    - docker
+  runs_on: app-01
+- id: build-linux-gpu
+  tags:
+    - app-tier
+    - gpu
+  notes: Accelerated builds. The only executor declaring a Rust toolchain.
+  system: ci-selfhosted
+  scope: organization:example
+  pool: build-pool
+  status: offline
+  busy: false
+  ephemeral: false
+  os: linux
+  architecture: x86_64
+  selectors:
+    - self-hosted
+    - linux
+    - gpu
+  capabilities:
+    - docker
+    - rust
+  runs_on: app-02
+- id: deploy-linux-01
+  notes: Deployment executor, registered fresh per job. Ephemeral registration is evidence, not proof
+    that the underlying machine is clean.
+  system: ci-selfhosted
+  scope: organization:example
+  pool: ops-pool
+  status: online
+  busy: false
+  ephemeral: true
+  os: linux
+  selectors:
+    - self-hosted
+    - linux
+    - deploy
+  runs_on: app-01

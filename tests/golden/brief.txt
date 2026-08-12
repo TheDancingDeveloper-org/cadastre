@@ -1,0 +1,77 @@
+cadastre brief
+==============
+
+## Estate
+
+summary  7 hosts, 3 networks, 6 services, 5 endpoints, 3 domains, 3 secrets, 4 pipelines, 3 repos, 3 ci_executors, 2 ci_pools
+
+## Networks
+
+Exposure tiers are checked against these classes.
+
+network   class    tags
+--------  -------  ---------------
+edge-net  public   internet-facing
+lab-net   private  internal
+mgmt-net  private  restricted
+
+## Hosts
+
+host     role            networks           resources                services  tags
+-------  --------------  -----------------  -----------------------  --------  ---------------------------
+app-01   container-host  lab-net            8c 32G 500GB disk        3         app-tier,container-host
+app-02   container-host  lab-net            16c 64G 2000GB disk gpu  1         app-tier,container-host,gpu
+data-01  server          lab-net            8c 32G 4000GB disk       1         persistent-data
+edge-01  edge            edge-net,lab-net   2c 4G 40GB disk          1         edge,ingress
+hv-01    hypervisor      mgmt-net,lab-net   32c 128G 8000GB disk     0         infrastructure
+rtr-01   router          mgmt-net,edge-net                           0         infrastructure
+ws-01    workstation     lab-net                                     0         workstation
+
+## Services
+
+`AMBIGUOUS` means more than one pipeline claims the service and none is marked
+authoritative. Do not guess which one deploys.
+
+service    host     expose    endpoints                            deployed by
+---------  -------  --------  -----------------------------------  --------------------
+ci         app-01   internal  ci.internal.example.invalid:8000
+forge      app-01   internal  forge.internal.example.invalid:3000
+ingress    edge-01  public    edge.example.invalid:443             ops-repo-selfhosted
+notes-api  app-01   internal  notes.internal.example.invalid:8080  notes-api-selfhosted
+notes-db   data-01  none      db.internal.example.invalid:5432
+tagger     app-02   none                                           tagger-selfhosted
+
+## Repositories
+
+Dual-homing is the norm here. Push to the origin remote, not the mirror.
+
+repo            remotes                                         mirror
+--------------  ----------------------------------------------  -------------------------------
+notes-api-repo  forge-selfhosted(origin), forge-public(mirror)  forge-selfhosted → forge-public
+ops-repo        forge-selfhosted(origin)                        ? → forge-public
+tagger-repo     forge-selfhosted(origin)
+
+## Secret references
+
+References and existence only. No value ever transits this layer.
+
+- secrets-manager: 3 refs — /prod/ci/registry-read-token, /prod/ingress/acme-token, /prod/notes-api/db-password
+
+## Conventions in force
+
+Regexes are enforced by `cadastre check`. Match them before committing.
+
+host name         ^[a-z][a-z0-9-]{1,20}$
+service name      ^[a-z][a-z0-9-]{1,30}$
+secret ref        ^/(prod|staging|dev)/[a-z0-9-]+/[a-z0-9-]+$
+endpoint address  ^[a-z0-9.-]+\.example\.invalid$
+
+- public → network class public, must be fronted by ingress
+- internal → network class private
+- none → network class private
+
+## Provenance
+
+source    plugin  as_of                 state
+--------  ------  --------------------  -----
+declared  static  2026-08-07T08:00:00Z  fresh

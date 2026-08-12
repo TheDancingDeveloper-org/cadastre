@@ -1,0 +1,4 @@
+host_name: ^[a-z][a-z0-9-]{1,20}$
+service_name: ^[a-z][a-z0-9-]{1,30}$
+secret_ref: ^/(prod|staging|dev)/[a-z0-9-]+/[a-z0-9-]+$
+endpoint_address: ^[a-z0-9.-]+\.example\.invalid$

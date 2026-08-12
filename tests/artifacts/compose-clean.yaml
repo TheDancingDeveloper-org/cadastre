@@ -1,0 +1,11 @@
+# A proposal that violates nothing. The positive control for every rule below.
+x-cadastre:
+  host: app-01
+  expose: internal
+services:
+  reports:
+    image: example.invalid/reports:1.0
+    ports:
+      - "8123:8080"
+    environment:
+      DB_PASSWORD: /prod/notes-api/db-password

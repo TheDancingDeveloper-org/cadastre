@@ -1,0 +1,6 @@
+x-cadastre:
+  host: edge-01
+  expose: public
+services:
+  reports:
+    image: example.invalid/reports:1.0

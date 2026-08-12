@@ -1,0 +1,117 @@
+# Pull-request CI. Builds and tests; deploys nothing.
+#
+# Every job here runs on a GitHub-hosted runner. This is a public repository,
+# so `pull_request` builds untrusted fork code: putting that on the self-hosted
+# pool would hand an arbitrary contributor code execution inside the estate.
+# The self-hosted runners are reserved for the tag-gated release workflows,
+# which only ever build a reviewed commit on `main`.
+
+name: ci
+on:
+  # Branch pushes only gate main. Without the filter, every pushed branch that
+  # also has a PR open runs the whole matrix twice -- once for `push`, once for
+  # `pull_request` -- which is what buries the queue whenever Dependabot
+  # opens a batch.
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    strategy:
+      matrix:
+        # 3.14 is here because Dockerfile ships a python:3.14 runtime. Docker
+        # tag bumps read as "minor" to Dependabot, so without this entry an
+        # interpreter change reaches production untested. The `install` job
+        # runs scripts/check-shipped-python.sh to keep the two in step.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Install matrix Python
+        run: uv python install ${{ matrix.python-version }}
+      - run: uv sync --frozen --extra dev --extra mcp-server
+      - run: uv run ruff check src tests scripts/e2e_stack.py
+      - run: uv run ruff format --check src tests scripts/e2e_stack.py
+      - run: uv run mypy
+      - run: uv run pytest --cov=src/cadastre --cov-report=term-missing --cov-report=xml
+      - name: Upload Python coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-coverage-${{ matrix.python-version }}
+          path: coverage.xml
+      - run: uv run cadastre --catalog examples/catalog fmt --check
+      - name: schema is current
+        run: |
+          uv run cadastre --catalog examples/catalog schema > /tmp/schema.json
+          diff -u schema/catalog.schema.json /tmp/schema.json
+      - name: policy gate
+        run: |
+          uv run cadastre --catalog examples/catalog check \
+            examples/catalog/declared/policy/grants.yaml --warnings-as-errors
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: uv tool install produces a working cadastre
+        run: |
+          uv tool install .
+          "$(uv tool dir)/cadastre/bin/cadastre" --version
+      # Rides along here rather than in its own job: this is two `sed` calls.
+      - name: shipped interpreter is covered by the test matrix
+        run: sh scripts/check-shipped-python.sh
+
+  e2e:
+    name: full-stack e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Install E2E Python
+        run: uv python install 3.12
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install Python stack
+        run: uv sync --frozen --extra dev --extra mcp-server
+      - name: Install GUI dependencies
+        working-directory: ui
+        run: npm ci --ignore-scripts
+      # Without these two, nothing in CI ever runs tsc or vitest: the only GUI
+      # gate was Playwright, and `vite build` happened solely inside the image
+      # build at publish time. A TypeScript or Vitest upgrade could therefore
+      # go green here and still be broken.
+      - name: Typecheck GUI
+        working-directory: ui
+        run: npm run typecheck
+      - name: GUI unit tests
+        working-directory: ui
+        run: npm test
+      - name: Install browser
+        working-directory: ui
+        run: npx playwright install --with-deps chromium
+      - name: Run browser and transport E2E
+        run: sh scripts/run-e2e.sh
+      - name: Upload E2E diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: full-stack-e2e
+          path: .ci-artifacts/e2e

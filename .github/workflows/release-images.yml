@@ -1,0 +1,180 @@
+name: Release images
+
+# The container half of a release: build both images, sign them, attest them,
+# and push them. Gated on `refs/tags/v*` and nothing else.
+#
+# This replaces `.woodpecker/production.yaml`, which held the same gates and
+# never ran: Woodpecker had no `cadastre` repository, so the cosign/SBOM
+# path was defined but unreachable, and every image the estate ran was built by
+# hand. The gate itself is unchanged — `scripts/release-gates.sh` is CI-agnostic
+# and is still the single implementation. This workflow only supplies the
+# artifacts and the credentials it expects.
+#
+# The wheel is NOT published here. `release-pypi.yml` already owns that on the
+# same tag, so this passes CADASTRE_SKIP_PYPI_PUBLISH=1; two publishers of one
+# version means the second fails on an immutable index after the images are
+# already signed and pushed.
+#
+# Signing is keyless. `id-token: write` lets cosign use the workflow's OIDC
+# identity via Fulcio/Rekor, so there is no signing key to store or rotate, and
+# the signature is bound to this repository and workflow rather than to a
+# secret anyone holding it could reproduce.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: cadastre-release-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-images:
+    # `docker`/`publish` is advertised only by the two Docker-in-Docker-backed
+    # workers, and this job needs a daemon for buildx and the container smoke.
+    # Release builds run on the trusted self-hosted pool: the registry login
+    # and signing identity are runner-managed and never leave it. This is a
+    # tag-gated workflow, so it only ever builds a reviewed commit.
+    runs-on: [self-hosted, node-b, linux, x64, docker, publish]
+    env:
+      CADASTRE_REGISTRY: ghcr.io
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Install supply-chain tooling
+        uses: anchore/sbom-action/download-syft@v0
+
+      - uses: sigstore/cosign-installer@v3
+
+      - uses: imjasonh/setup-crane@v0.4
+
+      - name: Resolve version and assert the tag agrees
+        id: version
+        run: |
+          set -eu
+          version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/cadastre/__init__.py)
+          test -n "$version"
+          # release-gates.sh re-checks this, but failing here keeps a
+          # mislabelled tag from consuming a full build first.
+          if [ "${GITHUB_REF_NAME}" != "v$version" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match declared version $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # A registry repository name must be lowercase, `github.repository_owner`
+      # is not (TheDancingDeveloper-org), and workflow expressions have no
+      # lower-casing function — so the references are built here instead of in
+      # the job's `env:`, where they would be interpolated verbatim and reach
+      # crane as an unparseable reference. The images the estate already runs
+      # live under the lowercased owner, so this is also the only spelling that
+      # pushes to the same package.
+      - name: Resolve the image references
+        run: |
+          set -eu
+          owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          echo "CADASTRE_IMAGE=ghcr.io/$owner/cadastre:sha-$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "CADASTRE_GUI_IMAGE=ghcr.io/$owner/cadastre-gui:sha-$GITHUB_SHA" >> "$GITHUB_ENV"
+
+      # The gate requires a test report as a release artifact, so the suite runs
+      # here rather than being taken on trust from another workflow.
+      - name: Verify
+        run: |
+          set -eu
+          mkdir -p .ci-artifacts
+          uv sync --extra dev --extra mcp-server
+          uv run ruff check src tests
+          uv run ruff format --check src tests
+          uv run mypy
+          uv run pytest -q > .ci-artifacts/pytest.txt
+          cat .ci-artifacts/pytest.txt
+
+      - name: Build the Python package
+        run: |
+          set -eu
+          mkdir -p .ci-artifacts/package
+          uv build --out-dir .ci-artifacts/package
+          sh scripts/package-install-smoke.sh \
+            "$(find .ci-artifacts/package -maxdepth 1 -name '*.whl' -print -quit)"
+
+      # The self-hosted image preinstalls no language runtimes, so the GUI
+      # build has to bring its own Node — on a hosted runner this step was
+      # invisible because one was already there. Kept in step with ci.yaml's
+      # e2e job, which builds the same `ui/` tree.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build the GUI bundle
+        run: |
+          set -eu
+          (cd ui && npm ci --ignore-scripts && npm run build)
+          tar -czf ".ci-artifacts/cadastre-gui-${{ steps.version.outputs.version }}.tar.gz" \
+            -C ui/dist .
+          test -s ".ci-artifacts/cadastre-gui-${{ steps.version.outputs.version }}.tar.gz"
+
+      - name: Build OCI archives
+        run: |
+          set -eu
+          test "$(sed -n 's/^FROM .*@\(sha256:[0-9a-f]*\).*/\1/p' Dockerfile | wc -l)" -eq 1
+          docker buildx build \
+            --build-arg CADASTRE_SOURCE_REVISION="$GITHUB_SHA" \
+            --build-arg CADASTRE_SCHEMA_VERSION=1 \
+            --build-arg CADASTRE_VERSION="${{ steps.version.outputs.version }}" \
+            --output "type=oci,name=cadastre:test,dest=.ci-artifacts/cadastre.oci.tar" \
+            --output "type=docker,name=cadastre:test,dest=.ci-artifacts/cadastre.docker.tar" .
+          docker buildx build -f Dockerfile.gui \
+            --build-arg CADASTRE_SOURCE_REVISION="$GITHUB_SHA" \
+            --build-arg CADASTRE_SCHEMA_VERSION=1 \
+            --build-arg CADASTRE_VERSION="${{ steps.version.outputs.version }}" \
+            --output "type=oci,name=cadastre-gui:test,dest=.ci-artifacts/cadastre-gui.oci.tar" .
+          sha256sum .ci-artifacts/cadastre.oci.tar > .ci-artifacts/cadastre.oci.sha256
+          sha256sum .ci-artifacts/cadastre-gui.oci.tar > .ci-artifacts/cadastre-gui.oci.sha256
+
+      - name: Verify the OCI archives
+        run: |
+          set -eu
+          python3 scripts/verify-oci-archive.py .ci-artifacts/cadastre.oci.tar
+          python3 scripts/verify-oci-archive.py .ci-artifacts/cadastre-gui.oci.tar
+
+      - name: Container smoke
+        run: |
+          set -eu
+          # The OCI archive is the release artifact — checksummed, verified,
+          # signed and attested — and `docker load` cannot read OCI layout
+          # without the containerd image store. Smoke-test a docker-archive
+          # export of the same build instead of converting the artifact.
+          docker load --input .ci-artifacts/cadastre.docker.tar
+          ./scripts/container-smoke.sh cadastre:test
+
+      # Scan, sign, attest, push. `CI_*` are the names the gate reads; they are
+      # Woodpecker's spellings kept so the script stays one implementation.
+      - name: Release gates
+        env:
+          CADASTRE_REGISTRY_USER: ${{ github.actor }}
+          CADASTRE_REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CADASTRE_SKIP_PYPI_PUBLISH: "1"
+          CI_COMMIT_TAG: ${{ github.ref_name }}
+          CI_COMMIT_SHA: ${{ github.sha }}
+          CI_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: ./scripts/release-gates.sh
+
+      - name: Publish release artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ steps.version.outputs.version }}
+          path: .ci-artifacts/release
+          if-no-files-found: error

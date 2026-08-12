@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "cadastre": {
+      "command": "cadastre-mcp-remote",
+      "args": [],
+      "env": {
+        "CADASTRE_MCP_URL": "${CADASTRE_MCP_URL}",
+        "CADASTRE_HTTP_TOKEN_FILE": "${CADASTRE_HTTP_TOKEN_FILE}",
+        "CADASTRE_REMOTE_ONLY": "1"
+      }
+    }
+  }
+}

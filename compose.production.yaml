@@ -1,0 +1,150 @@
+x-cadastre-base: &cadastre-base
+  image: ${CADASTRE_IMAGE:-ghcr.io/example/cadastre@sha256:REPLACE_WITH_SIGNED_DIGEST}
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m
+  volumes:
+    - cadastre-data:/var/lib/cadastre
+  environment:
+    CADASTRE_DATA_DIR: /var/lib/cadastre
+  restart: unless-stopped
+  init: true
+  stop_grace_period: 30s
+  deploy:
+    resources:
+      limits:
+        cpus: "2.0"
+        memory: 1G
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  healthcheck:
+    test: [CMD, cadastre, status, --data-dir, /var/lib/cadastre, --json]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+  networks: [cadastre]
+
+x-cadastre:
+  host: app-01
+
+services:
+  cadastre-local:
+    <<: *cadastre-base
+    profiles: [local]
+    command: [serve, --bind, 0.0.0.0:8000, --profile, loopback-development]
+    ports: ["127.0.0.1:${CADASTRE_LOCAL_PORT:-8000}:8000"]
+
+  cadastre-api:
+    <<: *cadastre-base
+    profiles: [direct-https]
+    command: [serve, --bind, 0.0.0.0:8000, --profile, direct-https, --allow-non-loopback, --require-auth, --tls-cert, /run/cadastre/tls/tls.crt, --tls-key, /run/cadastre/tls/tls.key, --token-file, /run/cadastre/auth/tokens, --audit-path, /var/lib/cadastre/audit/security.jsonl]
+    ports: ["${CADASTRE_BIND_IP:-127.0.0.1}:${CADASTRE_API_PORT:-8443}:8000"]
+    volumes:
+      - cadastre-data:/var/lib/cadastre
+      - ${CADASTRE_TLS_DIR:-/etc/cadastre/tls}:/run/cadastre/tls:ro
+      - ${CADASTRE_AUTH_DIR:-/etc/cadastre/auth}:/run/cadastre/auth:ro
+    healthcheck:
+      test: [CMD, python, -c, "import ssl,urllib.request; urllib.request.urlopen('https://127.0.0.1:8000/health/ready', context=ssl._create_unverified_context()).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  cadastre-mcp:
+    <<: *cadastre-base
+    profiles: [direct-mcp]
+    command: [mcp-http, --bind, 0.0.0.0:8001, --allow-non-loopback, --tls-cert, /run/cadastre/tls/tls.crt, --tls-key, /run/cadastre/tls/tls.key, --token-file, /run/cadastre/auth/tokens, --audit-path, /var/lib/cadastre/audit/security.jsonl]
+    ports: ["${CADASTRE_BIND_IP:-127.0.0.1}:${CADASTRE_MCP_PORT:-8444}:8001"]
+    volumes:
+      - cadastre-data:/var/lib/cadastre
+      - ${CADASTRE_TLS_DIR:-/etc/cadastre/tls}:/run/cadastre/tls:ro
+      - ${CADASTRE_AUTH_DIR:-/etc/cadastre/auth}:/run/cadastre/auth:ro
+    healthcheck:
+      test: [CMD, cadastre, status, --data-dir, /var/lib/cadastre, --json]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  cadastre-gui:
+    image: ${CADASTRE_GUI_IMAGE:-ghcr.io/example/cadastre-gui@sha256:REPLACE_WITH_SIGNED_DIGEST}
+    profiles: [direct-https, direct-mcp]
+    read_only: true
+    user: "101:101"
+    ports: ["${CADASTRE_BIND_IP:-127.0.0.1}:${CADASTRE_GUI_PORT:-8080}:8080"]
+    environment:
+      CADASTRE_API_ORIGIN: ${CADASTRE_API_ORIGIN:-https://localhost:8443}
+    tmpfs:
+      - /var/cache/nginx:rw,noexec,nosuid,size=32m,uid=101,gid=101,mode=0755
+      - /var/run:rw,noexec,nosuid,size=4m,uid=101,gid=101,mode=0755
+      - /tmp:rw,noexec,nosuid,size=8m,uid=101,gid=101,mode=0755
+    restart: unless-stopped
+    init: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [cadastre]
+
+  cadastre-proxy:
+    <<: *cadastre-base
+    profiles: [proxy]
+    command:
+      - serve
+      - --bind
+      - 0.0.0.0:8000
+      - --profile
+      - trusted-proxy
+      - --allow-non-loopback
+      - --require-auth
+      - --proxy-network
+      - "${CADASTRE_PROXY_NETWORK:-10.0.0.0/8}"
+      - --proxy-scope
+      - "${CADASTRE_PROXY_SCOPE:-proxy=catalog.read}"
+      - --proxy-secret-file
+      - /run/cadastre/proxy/secret
+    volumes:
+      - cadastre-data:/var/lib/cadastre
+      - ${CADASTRE_PROXY_DIR:-/etc/cadastre/proxy}:/run/cadastre/proxy:ro
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  cadastre-collector:
+    <<: *cadastre-base
+    profiles: [collector]
+    # Universal-auth login, then exec `cadastre collect` (DESIGN §2.5): the
+    # client-id/secret arrive as a read-only bind-mounted directory, never
+    # as an environment variable, and the short-lived access token they
+    # mint lives only in this process's environment — never written to
+    # `cadastre-data`, never logged. Estates not using Infisical for
+    # `secrets-infisical` sources can drop this entrypoint override and go
+    # back to `command: [collect]` with a static `token_env` credential
+    # instead.
+    entrypoint: [python, /app/scripts/infisical-entrypoint.py]
+    command: [cadastre, collect]
+    restart: "no"
+    environment:
+      CADASTRE_DATA_DIR: /var/lib/cadastre
+      INFISICAL_CLIENT_ID_FILE: /run/cadastre/infisical/client_id
+      INFISICAL_CLIENT_SECRET_FILE: /run/cadastre/infisical/client_secret
+      # Comma-separate this if more than one configured `secrets-infisical`
+      # source's `token_env` (declared/plugins.yaml) shares this login.
+      INFISICAL_TOKEN_ENV: ${CADASTRE_INFISICAL_TOKEN_ENV:-CADASTRE_P_SECRETS_TOKEN}
+    volumes:
+      - cadastre-data:/var/lib/cadastre
+      - ${CADASTRE_COLLECT_CONFIG_DIR:-/etc/cadastre/collect}:/run/cadastre/collect:ro
+      - ${CADASTRE_INFISICAL_DIR:-/etc/cadastre/infisical}:/run/cadastre/infisical:ro
+
+volumes:
+  cadastre-data:
+    name: ${CADASTRE_VOLUME:-cadastre-data}
+
+networks:
+  cadastre:
+    name: ${CADASTRE_NETWORK:-cadastre}
+    driver: bridge

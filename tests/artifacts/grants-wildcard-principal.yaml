@@ -1,0 +1,6 @@
+grants:
+- id: g-998
+  principal: "*"
+  role: deploy
+  targets: [tag:app-tier]
+  actions: [shell.read]

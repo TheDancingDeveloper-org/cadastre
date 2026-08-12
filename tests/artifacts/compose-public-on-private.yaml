@@ -1,0 +1,7 @@
+x-cadastre:
+  host: app-01
+  expose: public
+  fronted_by: ingress
+services:
+  reports:
+    image: example.invalid/reports:1.0

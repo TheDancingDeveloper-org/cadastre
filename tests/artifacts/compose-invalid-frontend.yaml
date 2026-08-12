@@ -1,0 +1,7 @@
+x-cadastre:
+  host: app-01
+  expose: public
+  fronted_by: no-such-ingress
+services:
+  public-api:
+    image: example.invalid/public-api:1

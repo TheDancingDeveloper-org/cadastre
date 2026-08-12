@@ -1,0 +1,12 @@
+grants:
+- id: g-001
+  principal: agent
+  role: deploy
+  targets:
+  - tag:app-tier
+  actions:
+  - shell.read
+  - container.restart
+  deny:
+  - tag:persistent-data
+  ttl: 5m

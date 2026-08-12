@@ -1,0 +1,5 @@
+:root { font-family: system-ui, sans-serif; color: #17202a; background: #f5f6f8; }
+body { margin: 0; } main { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+nav { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0; } button { padding: .5rem .8rem; cursor: pointer; }
+article, form, section { background: white; border: 1px solid #d8dee6; border-radius: .4rem; padding: 1rem; margin: 1rem 0; }
+pre { overflow: auto; background: #f0f2f4; padding: 1rem; } .unknown { color: #8a3b12; }

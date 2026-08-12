@@ -1,0 +1,4 @@
+# Optional module activation.
+modules:
+  manifest:
+    enabled: true

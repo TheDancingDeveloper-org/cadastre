@@ -1,0 +1,15 @@
+tiers:
+- name: public
+  network_class: public
+  network: edge-net
+  requires_ingress: true
+  description: Reachable from the internet. Must sit behind the ingress service.
+- name: internal
+  network_class: private
+  network: lab-net
+  requires_ingress: false
+  description: Reachable from the private network only.
+- name: none
+  network_class: private
+  requires_ingress: false
+  description: No inbound endpoint at all.

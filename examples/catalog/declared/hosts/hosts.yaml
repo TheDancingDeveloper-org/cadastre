@@ -1,0 +1,98 @@
+- id: app-01
+  tags:
+    - app-tier
+    - container-host
+  notes: General workload host. Default placement for internal services.
+  role: container-host
+  hosted_in: hv-01
+  reachable_from:
+    - lab-net
+  resources:
+    cpu_cores: 8
+    memory_gb: 32
+    disk_gb: 500
+  access:
+    - kind: shell
+      via: ssh-ca
+      role: deploy
+      reachable_from:
+        - lab-net
+- id: app-02
+  tags:
+    - app-tier
+    - container-host
+    - gpu
+  notes: Accelerated workloads. Also the only host with fast local disk.
+  role: container-host
+  hosted_in: hv-01
+  reachable_from:
+    - lab-net
+  resources:
+    cpu_cores: 16
+    memory_gb: 64
+    disk_gb: 2000
+    gpu: generic-accelerator-16gb
+  access:
+    - kind: shell
+      via: ssh-ca
+      role: deploy
+      reachable_from:
+        - lab-net
+- id: data-01
+  tags:
+    - persistent-data
+  notes: Database host. Deliberately excluded from general placement.
+  role: server
+  hosted_in: hv-01
+  reachable_from:
+    - lab-net
+  resources:
+    cpu_cores: 8
+    memory_gb: 32
+    disk_gb: 4000
+- id: edge-01
+  tags:
+    - edge
+    - ingress
+  notes: Reverse proxy. The only host in a public-class network.
+  role: edge
+  reachable_from:
+    - edge-net
+    - lab-net
+  resources:
+    cpu_cores: 2
+    memory_gb: 4
+    disk_gb: 40
+  access:
+    - kind: shell
+      via: ssh-ca
+      role: deploy
+      reachable_from:
+        - lab-net
+- id: hv-01
+  tags:
+    - infrastructure
+  notes: Hypervisor. Runs no workloads of its own.
+  role: hypervisor
+  reachable_from:
+    - mgmt-net
+    - lab-net
+  resources:
+    cpu_cores: 32
+    memory_gb: 128
+    disk_gb: 8000
+- id: rtr-01
+  tags:
+    - infrastructure
+  notes: Router. Reached over SSH via the exec plugin; nothing is installed on it.
+  role: router
+  reachable_from:
+    - mgmt-net
+    - edge-net
+- id: ws-01
+  tags:
+    - workstation
+  notes: Operator workstation. Not a placement target.
+  role: workstation
+  reachable_from:
+    - lab-net

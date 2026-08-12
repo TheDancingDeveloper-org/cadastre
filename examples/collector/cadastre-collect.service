@@ -1,0 +1,37 @@
+[Unit]
+Description=Cadastre — collect observed evidence from the estate
+Documentation=https://github.com/TheDancingDeveloper-org/cadastre
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cadastre
+Group=cadastre
+
+# Initialized SQLite data directory. Catalog and observed databases remain
+# separate files and transaction domains.
+Environment=CADASTRE_DATA_DIR=/var/lib/cadastre
+
+# One read-only credential per plugin, named by token_env in
+# plugin configuration. Mode 0400, owned by the cadastre user. This file is
+# the only place a credential exists on this host.
+EnvironmentFile=/etc/cadastre/collect.env
+
+ExecStart=/usr/local/bin/cadastre-collect
+
+# A hung plugin must not wedge the timer; the runner has its own per-call
+# timeout, this is the backstop for the whole run.
+TimeoutStartSec=15min
+
+# Cadastre reads the catalog and writes observed.sqlite3.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/cadastre
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

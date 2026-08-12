@@ -1,0 +1,45 @@
+name: Mirror verification (main)
+
+# This workflow does not publish and does not deploy. The authoritative release
+# path is `release-images.yml` (container images: syft, cosign, keyless
+# attestation) plus `release-pypi.yml` (the wheel), both gated on `refs/tags/v*`
+# and both routing through `scripts/release-gates.sh`. An ungated second publish
+# path on every push to `main` bypassed all of it, so the image-push and
+# deployment jobs were removed. Deployment belongs in ops, not in the product
+# repository.
+#
+#
+# NOTE: this workflow's name is a required status check on `main`. Renaming it
+# would silently drop that protection, which is why it still reads "Mirror
+# verification" despite there no longer being a mirror.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cadastre-main
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Check runner Python
+        run: python3 --version
+      - run: uv sync --extra dev --extra mcp-server
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run mypy
+      - run: uv run pytest -q
+      - run: uv run cadastre --catalog examples/catalog schema > /tmp/schema.json
+      - run: diff -u schema/catalog.schema.json /tmp/schema.json
+      - run: uv run cadastre --catalog examples/catalog fmt --check
+      - run: uv run cadastre --catalog examples/catalog check examples/catalog/declared/policy/grants.yaml --warnings-as-errors
+      - run: uv run cadastre security-check --bind 127.0.0.1:8000 --profile loopback-development

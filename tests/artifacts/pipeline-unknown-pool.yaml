@@ -1,0 +1,13 @@
+# `staging-pool` is not declared. Selecting it routes nowhere.
+name: Build
+"on": [push]
+x-cadastre:
+  system: ci-selfhosted
+  repo: notes-api-repo
+jobs:
+  build:
+    runs-on:
+      group: staging-pool
+      labels: [self-hosted, linux]
+    steps:
+      - run: echo build

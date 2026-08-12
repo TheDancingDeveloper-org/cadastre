@@ -1,0 +1,8 @@
+x-cadastre:
+  host: app-01
+  expose: none
+services:
+  private-worker:
+    image: example.invalid/private-worker:1
+    ports:
+      - "8123:8080"

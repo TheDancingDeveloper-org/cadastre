@@ -1,0 +1,65 @@
+version: 2
+
+# Grouping matters more than it looks: this repository builds on a small
+# self-hosted pool, and one PR per dependency means one full CI matrix per
+# dependency. Majors stay in their own group so a breaking bump never rides
+# along with routine patches.
+updates:
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      python-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      python-major:
+        patterns: ["*"]
+        update-types: ["major"]
+
+  - package-ecosystem: npm
+    directory: "/ui"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      ui-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      ui-major:
+        patterns: ["*"]
+        update-types: ["major"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # `python` is ungrouped from the rest and takes every update type,
+      # because Dependabot classifies a Docker bump by its *tag*: `3.12 ->
+      # 3.14` reads as "minor" while actually changing the interpreter the
+      # production image runs on (#46). Its own group means such a change is
+      # always its own reviewable PR rather than a line inside a batch of
+      # routine digest bumps. What makes it *safe* is the matrix check in
+      # ci.yaml's install job; this only makes it visible.
+      images-python:
+        patterns: ["python"]
+      images-minor:
+        patterns: ["*"]
+        exclude-patterns: ["python"]
+        update-types: ["minor", "patch"]
+      images-major:
+        patterns: ["*"]
+        exclude-patterns: ["python"]
+        update-types: ["major"]

@@ -1,0 +1,299 @@
+{
+  "command": "cadastre brief",
+  "result": {
+    "counts": {
+      "host": 7,
+      "network": 3,
+      "service": 6,
+      "endpoint": 5,
+      "domain": 3,
+      "secret": 3,
+      "pipeline": 4,
+      "repo": 3,
+      "ci_executor": 3,
+      "ci_pool": 2,
+      "deployment_topology": 0
+    },
+    "networks": [
+      {
+        "id": "edge-net",
+        "class": "public",
+        "tags": [
+          "internet-facing"
+        ]
+      },
+      {
+        "id": "lab-net",
+        "class": "private",
+        "tags": [
+          "internal"
+        ]
+      },
+      {
+        "id": "mgmt-net",
+        "class": "private",
+        "tags": [
+          "restricted"
+        ]
+      }
+    ],
+    "hosts": [
+      {
+        "id": "app-01",
+        "role": "container-host",
+        "reachable_from": [
+          "lab-net"
+        ],
+        "tags": [
+          "app-tier",
+          "container-host"
+        ],
+        "services": [
+          "ci",
+          "forge",
+          "notes-api"
+        ]
+      },
+      {
+        "id": "app-02",
+        "role": "container-host",
+        "reachable_from": [
+          "lab-net"
+        ],
+        "tags": [
+          "app-tier",
+          "container-host",
+          "gpu"
+        ],
+        "services": [
+          "tagger"
+        ]
+      },
+      {
+        "id": "data-01",
+        "role": "server",
+        "reachable_from": [
+          "lab-net"
+        ],
+        "tags": [
+          "persistent-data"
+        ],
+        "services": [
+          "notes-db"
+        ]
+      },
+      {
+        "id": "edge-01",
+        "role": "edge",
+        "reachable_from": [
+          "edge-net",
+          "lab-net"
+        ],
+        "tags": [
+          "edge",
+          "ingress"
+        ],
+        "services": [
+          "ingress"
+        ]
+      },
+      {
+        "id": "hv-01",
+        "role": "hypervisor",
+        "reachable_from": [
+          "mgmt-net",
+          "lab-net"
+        ],
+        "tags": [
+          "infrastructure"
+        ],
+        "services": []
+      },
+      {
+        "id": "rtr-01",
+        "role": "router",
+        "reachable_from": [
+          "mgmt-net",
+          "edge-net"
+        ],
+        "tags": [
+          "infrastructure"
+        ],
+        "services": []
+      },
+      {
+        "id": "ws-01",
+        "role": "workstation",
+        "reachable_from": [
+          "lab-net"
+        ],
+        "tags": [
+          "workstation"
+        ],
+        "services": []
+      }
+    ],
+    "services": [
+      {
+        "id": "ci",
+        "runs_on": "app-01",
+        "expose": "internal",
+        "endpoints": [
+          "ci-internal"
+        ],
+        "authoritative_pipeline": null,
+        "pipelines": []
+      },
+      {
+        "id": "forge",
+        "runs_on": "app-01",
+        "expose": "internal",
+        "endpoints": [
+          "forge-internal"
+        ],
+        "authoritative_pipeline": null,
+        "pipelines": []
+      },
+      {
+        "id": "ingress",
+        "runs_on": "edge-01",
+        "expose": "public",
+        "endpoints": [
+          "ingress-https"
+        ],
+        "authoritative_pipeline": "ops-repo-selfhosted",
+        "pipelines": [
+          "ops-repo-selfhosted"
+        ]
+      },
+      {
+        "id": "notes-api",
+        "runs_on": "app-01",
+        "expose": "internal",
+        "endpoints": [
+          "notes-api-internal"
+        ],
+        "authoritative_pipeline": "notes-api-selfhosted",
+        "pipelines": [
+          "notes-api-public",
+          "notes-api-selfhosted"
+        ]
+      },
+      {
+        "id": "notes-db",
+        "runs_on": "data-01",
+        "expose": "none",
+        "endpoints": [
+          "notes-db-internal"
+        ],
+        "authoritative_pipeline": null,
+        "pipelines": []
+      },
+      {
+        "id": "tagger",
+        "runs_on": "app-02",
+        "expose": "none",
+        "endpoints": [],
+        "authoritative_pipeline": "tagger-selfhosted",
+        "pipelines": [
+          "tagger-selfhosted"
+        ]
+      }
+    ],
+    "repos": [
+      {
+        "id": "notes-api-repo",
+        "remotes": [
+          {
+            "forge": "forge-selfhosted",
+            "role": "origin",
+            "url": "https://forge.example.invalid/apps/notes-api.git"
+          },
+          {
+            "forge": "forge-public",
+            "role": "mirror",
+            "url": "https://public.example.invalid/example/notes-api.git"
+          }
+        ],
+        "mirror_from": "forge-selfhosted",
+        "mirror_to": "forge-public"
+      },
+      {
+        "id": "ops-repo",
+        "remotes": [
+          {
+            "forge": "forge-selfhosted",
+            "role": "origin",
+            "url": "https://forge.example.invalid/ops/ops-repo.git"
+          }
+        ],
+        "mirror_from": null,
+        "mirror_to": "forge-public"
+      },
+      {
+        "id": "tagger-repo",
+        "remotes": [
+          {
+            "forge": "forge-selfhosted",
+            "role": "origin",
+            "url": "https://forge.example.invalid/apps/tagger.git"
+          }
+        ],
+        "mirror_from": null,
+        "mirror_to": null
+      }
+    ],
+    "secret_refs": [
+      {
+        "id": "ingress-acme-token",
+        "ref": "/prod/ingress/acme-token",
+        "store": "secrets-manager"
+      },
+      {
+        "id": "notes-api-db-password",
+        "ref": "/prod/notes-api/db-password",
+        "store": "secrets-manager"
+      },
+      {
+        "id": "registry-read-token",
+        "ref": "/prod/ci/registry-read-token",
+        "store": "secrets-manager"
+      }
+    ],
+    "policy": {
+      "exposure": [
+        {
+          "name": "public",
+          "network_class": "public",
+          "requires_ingress": true
+        },
+        {
+          "name": "internal",
+          "network_class": "private",
+          "requires_ingress": false
+        },
+        {
+          "name": "none",
+          "network_class": "private",
+          "requires_ingress": false
+        }
+      ],
+      "conventions": {
+        "host_name": "^[a-z][a-z0-9-]{1,20}$",
+        "service_name": "^[a-z][a-z0-9-]{1,30}$",
+        "secret_ref": "^/(prod|staging|dev)/[a-z0-9-]+/[a-z0-9-]+$",
+        "endpoint_address": "^[a-z0-9.-]+\\.example\\.invalid$"
+      }
+    }
+  },
+  "provenance": [
+    {
+      "source": "declared",
+      "plugin": "static",
+      "as_of": "2026-08-07T08:00:00Z",
+      "ttl_seconds": 0,
+      "stale": false
+    }
+  ],
+  "stale": []
+}

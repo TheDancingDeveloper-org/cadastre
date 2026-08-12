@@ -1,0 +1,14 @@
+{
+  "apps": {
+    "http": {
+      "servers": {
+        "edge": {
+          "listen": [":443"],
+          "routes": [
+            {"match": [{"host": ["notes.internal.example.invalid"]}], "handle": []}
+          ]
+        }
+      }
+    }
+  }
+}

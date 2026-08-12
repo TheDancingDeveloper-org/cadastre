@@ -1,0 +1,6 @@
+x-cadastre:
+  host: app-02
+  expose: internal
+services:
+  notes-api:
+    image: example.invalid/notes-api:2.0

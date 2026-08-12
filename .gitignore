@@ -1,0 +1,67 @@
+# ---------------------------------------------------------------------------
+# Audit findings & environment reconnaissance — NEVER COMMIT
+#
+# This is a public repository. Anything describing the real reference estate
+# (hostnames, tailnet addresses, zones, repo lists, host capabilities) stays
+# local. Only generic, anonymised examples belong in tracked files.
+# ---------------------------------------------------------------------------
+*.local.md
+*.local.yaml
+*.local.yml
+*.local.json
+/audit/
+/migration-evidence/
+/.ci-artifacts/
+/coverage.xml
+/.coverage
+/.audit/
+/local/
+/observed/
+/drift.json
+/githubrunner.md
+/proxmox.md
+# Real estate declarations are private by default; ship anonymised samples
+# under examples/ instead. The comment is on its own line deliberately —
+# gitignore only treats a line STARTING with # as a comment, so a trailing
+# one made this pattern match a directory literally named
+# "declared/          # real estate...", i.e. nothing at all.
+/declared/
+
+# Broker state — credentials, backend auth, audit log
+/audit-log/
+.cadastre/
+cadastre.toml
+*.pem
+*.key
+!examples/**/*.key.example
+
+# ---------------------------------------------------------------------------
+# Build and Python tooling
+# ---------------------------------------------------------------------------
+/target/
+**/*.rs.bk
+Cargo.lock.bak
+__pycache__/
+*.py[cod]
+*.egg-info/
+/build/
+/dist/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+/ui/node_modules/
+/ui/dist/
+/ui/test-results/
+/ui/playwright-report/
+
+# ---------------------------------------------------------------------------
+# Editor / OS
+# ---------------------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Agent worktrees and local session state
+.claude/

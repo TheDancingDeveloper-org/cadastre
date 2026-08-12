@@ -1,0 +1,13 @@
+.git
+.github
+.woodpecker
+.venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+tests
+declared
+observed
+*.local.md
+migration-evidence
+*.sqlite3

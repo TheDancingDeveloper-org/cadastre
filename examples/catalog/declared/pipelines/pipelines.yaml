@@ -1,0 +1,24 @@
+- id: notes-api-public
+  notes: Mirror-side build. Runs tests, deploys nothing.
+  repo: notes-api-repo
+  system: ci-public
+  file: .public-ci/build.yaml
+- id: notes-api-selfhosted
+  notes: Authoritative for deployment.
+  repo: notes-api-repo
+  system: ci-selfhosted
+  file: .ci/deploy.yaml
+  deploys:
+    - notes-api
+- id: ops-repo-selfhosted
+  repo: ops-repo
+  system: ci-selfhosted
+  file: .ci/deploy.yaml
+  deploys:
+    - ingress
+- id: tagger-selfhosted
+  repo: tagger-repo
+  system: ci-selfhosted
+  file: .ci/deploy.yaml
+  deploys:
+    - tagger

@@ -1,0 +1,6 @@
+x-cadastre:
+  host: app-77
+  expose: internal
+services:
+  reports:
+    image: example.invalid/reports:1.0

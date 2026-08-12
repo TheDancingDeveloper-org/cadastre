@@ -1,0 +1,13 @@
+# Security floors applied on top of the resolved dependency set, for packages
+# this project does not itself depend on and therefore cannot pin in
+# pyproject.toml.
+#
+# Both are enforced by the release scan gate (scripts/release-gates.sh), which
+# blocks HIGH/CRITICAL findings that have a fix available. Remove an entry once
+# the base image or the transitive dependency ships the fixed version on its
+# own, so this file stays a list of live exceptions rather than history.
+#
+# setuptools ships in python:3.14-slim-bookworm.       CVE-2025-47273
+setuptools>=78.1.1
+# msgpack arrives transitively through `mcp`.          GHSA-6v7p-g79w-8964
+msgpack>=1.2.1

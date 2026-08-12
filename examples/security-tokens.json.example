@@ -1,0 +1,10 @@
+{
+  "tokens": [
+    {
+      "token": "replace-with-a-random-value-from-a-secret-manager",
+      "principal": "agent-runtime",
+      "audience": "cadastre",
+      "scopes": ["mcp", "catalog.read", "catalog.check"]
+    }
+  ]
+}
