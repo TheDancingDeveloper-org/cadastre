@@ -105,7 +105,7 @@ infrastructure control plane.
 | [What Cadastre does](PRODUCT-GUIDE.md) | Plain-language concepts, examples, boundaries, and trust signals |
 | [Using Cadastre](USING-CADASTRE.md) | Installation, catalogs, commands, collection, and remote access |
 | [Architecture](ARCHITECTURE.md) | Components, data ownership, and interface boundaries |
-| [Deployment](DEPLOYMENT.md) | Containers, supported topologies, persistence, and operations |
+| [Deployment](DEPLOYMENT.md) | Containers, supported topologies, persistence, collector scheduling, and operations |
 | [Agent clients](AGENT-CLIENT.md) | Native MCP and the remote stdio bridge |
 | [Plugin authoring](PLUGINS.md) | The read-only plugin contract and a single-file example |
 | [Built-in plugins](BUILTIN_PLUGINS.md) | Configuration, credentials, outputs, and limits for shipped integrations |

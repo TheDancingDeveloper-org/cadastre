@@ -72,6 +72,15 @@ image as the schema-compatibility predicate.
 
 ### Changed
 
+- **`DEPLOYMENT.md` now documents how the containerised collector gets run.**
+  The compose stack defines `cadastre-collector` as a profiled, run-to-completion
+  job and contains nothing that would ever start it, while
+  `examples/collector/` only solves scheduling for a host install — so a stack
+  deployed as documented was configured to collect and never did, silently.
+  Section 8 gives the invocation, cron/systemd/Kubernetes recipes, why one shot
+  per run is what keeps the credential-minting entrypoint's tokens short-lived,
+  and how to verify a first successful run. The upgrade checklist now asks
+  whether anything still collects. Documentation only; no behaviour changed.
 - `src/cadastre/__init__.py` is the single source of truth for the version.
   The Streamable HTTP `serverInfo`, the outbound MCP `clientInfo`, the OpenAPI
   document, both image labels, the release metadata document, and the GUI

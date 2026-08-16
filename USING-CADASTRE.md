@@ -127,8 +127,10 @@ collection on the host that has the required read-only access:
 cadastre collect --data-dir ./cadastre-data
 ```
 
-The query server does not need collector credentials. The systemd example under
-`examples/collector/` demonstrates a separately scheduled collector job.
+The query server does not need collector credentials. Nothing schedules
+collection for you: the systemd example under `examples/collector/` is the host
+install, and section 8 of [DEPLOYMENT.md](DEPLOYMENT.md) is the same job for the
+containerised stack.
 
 Secret collectors return references and existence only. They never read or
 return values. Without a replication contract, drift still shows pairwise store
