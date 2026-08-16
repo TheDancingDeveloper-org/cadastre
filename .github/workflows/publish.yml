@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: [self-hosted, node-b, linux, x64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
