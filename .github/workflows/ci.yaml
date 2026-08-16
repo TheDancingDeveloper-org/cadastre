@@ -1,10 +1,30 @@
 # Pull-request CI. Builds and tests; deploys nothing.
 #
-# Every job here runs on a GitHub-hosted runner. This is a public repository,
-# so `pull_request` builds untrusted fork code: putting that on the self-hosted
-# pool would hand an arbitrary contributor code execution inside the estate.
-# The self-hosted runners are reserved for the tag-gated release workflows,
-# which only ever build a reviewed commit on `main`.
+# Every job names a self-hosted runner. `runs-on: ubuntu-latest` is forbidden
+# estate-wide and dynamic `runs-on` with it — see
+# `~/Working/docs/CI-RUNNER-GATES.md` (NFR-C4). The `public-node-b` group is
+# configured `allows_public_repositories=true` precisely so a public
+# repository like this one can use it.
+#
+# This file previously ran on hosted runners on purpose, reasoning that a
+# public repository's `pull_request` builds untrusted fork code and the
+# self-hosted pool can reach Forgejo, Infisical and Komodo. That risk is real
+# and has not gone away; what changed is where it is answered. A runner label
+# is the wrong control for it, because it also pushes every *trusted* run —
+# `push` to `main`, and PRs from branches only collaborators can create — off
+# the estate's pinned toolchain, which is the thing that makes a green CI mean
+# the same as a green release build.
+#
+# The fork case is answered where it belongs, and it is a **repository
+# setting, not a line in this file**: Settings -> Actions -> General -> "Fork
+# pull request workflows from outside collaborators" must require approval, so
+# untrusted code cannot reach a runner unreviewed. GitHub defaults public
+# repositories to requiring it for first-time contributors; "all outside
+# collaborators" is the setting this file assumes.
+#
+# That setting is the control. If it is ever relaxed, these labels do not save
+# anything and this comment is wrong. It has no REST endpoint for public
+# repositories, so it cannot be asserted in CI and has to be checked by eye.
 
 name: ci
 on:
@@ -25,7 +45,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, node-b, linux, x64]
     env:
       UV_PYTHON: ${{ matrix.python-version }}
     strategy:
@@ -61,7 +81,7 @@ jobs:
             examples/catalog/declared/policy/grants.yaml --warnings-as-errors
 
   install:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, node-b, linux, x64]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -75,7 +95,7 @@ jobs:
 
   e2e:
     name: full-stack e2e
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, node-b, linux, x64]
     timeout-minutes: 20
     env:
       UV_PYTHON: "3.12"
