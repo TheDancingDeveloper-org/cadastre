@@ -1,8 +1,18 @@
 # The scheduled collection job
 
 `cadastre collect` is a process that starts, collects, and exits — Cadastre does
-not daemonize (DESIGN §2.2). Something external has to run it on a schedule.
+not daemonize (DESIGN §2.5). Something external has to run it on a schedule.
 This directory is that something, as a systemd timer.
+
+It is a **host** install: a system user, `uv tool install cadastre`, and
+credentials in `/etc/cadastre` on that host. If the estate runs the containerised
+stack from `compose.production.yaml` instead, none of this applies — the
+scheduler still has to exist, but it wraps
+`docker compose --profile collector run --rm cadastre-collector` and the
+credentials stay in the mounts the compose file declares. That path, with cron,
+systemd, and Kubernetes CronJob recipes, is section 8 of
+[DEPLOYMENT.md](../../DEPLOYMENT.md). Do not run both against one data
+directory.
 
 ```
 [collector host]  this timer, read-only creds per plugin

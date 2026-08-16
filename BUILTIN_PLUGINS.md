@@ -16,6 +16,12 @@ for endpoints/DNS and a day for inventory. A failed or incredible empty source
 keeps the prior snapshot and is marked stale. Sources retain their registered
 plugin name for identity matching and their configured source id for provenance.
 
+None of these plugins run themselves. `cadastre collect` is invoked by an
+external scheduler: [`examples/collector/`](examples/collector/README.md) for a
+host install, section 8 of [DEPLOYMENT.md](DEPLOYMENT.md) for the containerised
+stack. A source whose freshness threshold is tighter than the collection
+interval renders as stale by design, so the two numbers belong to one decision.
+
 | Plugin | Upstream | Methods | Entity output | Auth | Suggested freshness |
 |---|---|---|---|---|---|
 | `static` | Cadastre catalog | inventory, network, endpoint, DNS, secret, VCS, CI reads | host, service, network, endpoint, domain, secret, repo, pipeline, ci_executor, ci_pool | none | catalog revision |

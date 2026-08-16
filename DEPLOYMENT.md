@@ -298,7 +298,16 @@ until the container is started.
    container is not seeing `modules.yaml`, and the catalog will refuse writes
    until it does. `GET /version` reports the running `application_version` and
    the compatibility fields above. Then run `cadastre integrity-check`.
-7. **Roll back** if readiness does not come up, integrity-check fails, or the
+7. **Confirm something still collects.** A ready query stack never collects on
+   its own; `cadastre-collector` sits behind a Compose profile and runs only
+   when an external scheduler runs it (section 8). An upgrade is a common place
+   to lose that scheduler, because the unit, cron entry, or CronJob lives
+   outside the compose file being replaced. `GET /sources` proves the plugins
+   are configured and handshaking, not that anything was collected — it runs a
+   live `plugin.info` and answers `ok` for a stack that has never collected at
+   all. The evidence of a run is a query's `provenance` block showing a recent
+   `as_of` per source, so run one collection by hand and read it (section 8.5).
+8. **Roll back** if readiness does not come up, integrity-check fails, or the
    reported `catalog_format_version` is not the one you verified: stop the
    stack, restore the step 1 backup into a clean volume, and start the
    previously pinned digest. Do not roll back a schema migration by starting
@@ -306,7 +315,227 @@ until the container is started.
    read it, which is exactly what the `rollback` field of the compatibility
    document says.
 
-## 8. Product versus environment
+## 8. Scheduling the containerised collector
+
+The compose stack defines `cadastre-collector` as a job, not a service:
+`profiles: [collector]` keeps it out of `docker compose up`, and
+`restart: "no"` makes it run to completion. Both are deliberate — Cadastre does
+not daemonize (`DESIGN.md` §2.5) — and together they mean the stack contains no
+mechanism that will ever start it. Nothing errors if the estate never adds one.
+The API stays healthy, `GET /sources` keeps reporting every plugin `ok`, and
+the catalog serves observations that get older forever.
+
+Scheduling is therefore a deployment decision the image cannot make. One run is
+one command:
+
+```bash
+docker compose --profile collector run --rm cadastre-collector
+```
+
+`run` rather than `up`, because the service is a job and `up` would wait on a
+process that is supposed to exit. `--profile collector` because the profile is
+what keeps it out of the ordinary stack. `--rm` because every run otherwise
+leaves a stopped container behind, and a year of hourly collection is 8,760 of
+them. No arguments: the service already carries its entrypoint, command, data
+volume, and credential mounts.
+
+The three recipes below wrap that one command. They are shapes, not a
+recommendation between orchestrators — pick whichever timer the estate already
+operates and monitors, because a scheduler nobody watches is the failure this
+section exists to prevent.
+
+### 8.1 One shot per run is the contract
+
+Each run is a fresh container, and that is a security property rather than an
+implementation detail. The collector's entrypoint,
+[`scripts/infisical-entrypoint.py`](scripts/infisical-entrypoint.py), performs a
+universal-auth login using the client-id/secret mounted read-only at
+`/run/cadastre/infisical/`, exports the short-lived access token it mints into
+the variable(s) named by `INFISICAL_TOKEN_ENV`, and `exec`s `cadastre collect`.
+The token exists only in that one process's environment, for the length of that
+one run. It is never written to `cadastre-data` and never logged, and when the
+process exits its only copy goes with it.
+
+The obvious-looking alternative — one long-running container looping
+`collect; sleep 3600`, or the same service with `restart: unless-stopped` —
+**is not recommended, and breaks that property.** It mints one token and holds
+it for the container's whole lifetime, so the credential's short expiry becomes
+decorative, a rotation or revocation upstream is picked up only on restart, and
+a token that outlives its own validity turns a scheduling problem into a silent
+authentication failure on every subsequent iteration. It also removes the one
+thing an external scheduler gives you for free: a run boundary the estate's
+existing monitoring can see and alert on.
+
+Estates not using Infisical drop the entrypoint override and go back to
+`command: [collect]` with a static `token_env` credential, as the comment in
+`compose.production.yaml` describes. The one-shot shape still applies: a static
+credential in a container that never restarts is a credential that never gets
+re-read.
+
+### 8.2 cron
+
+```cron
+17 * * * * cd /srv/cadastre && /usr/bin/docker compose --env-file /srv/cadastre/.env -f /srv/cadastre/compose.production.yaml --profile collector run --rm cadastre-collector >>/var/log/cadastre-collect.log 2>&1
+```
+
+Every absolute path in that line is load-bearing. `cron` runs with a minimal
+environment, no working directory you chose, and frequently no `docker` on
+`PATH`; the compose file is also full of `${CADASTRE_*}` substitutions, so the
+`--env-file` that an interactive `docker compose` picks up from the current
+directory has to be named explicitly. A cron entry that works when pasted into
+a login shell and fails from `crontab` is almost always one of those three.
+
+The offset minute spreads collection off the top of the hour, where every other
+scheduled job in the estate already is.
+
+Do not read a silent cron as a successful collection. `cadastre collect` exits
+`0` when a source fails: a plugin that cannot reach its upstream renders as a
+`STALE` row in the run's output and a stale source in every answer that depends
+on it, which is the designed behaviour (`DESIGN.md` §2.5) but not something
+cron's mail-on-failure will ever tell you about. A non-zero exit means compose,
+the entrypoint, or the catalog itself failed — a coarser signal than the one
+you actually want. Section 8.5 is the check that covers the difference.
+
+### 8.3 systemd timer
+
+The same timer shape as [`examples/collector/`](examples/collector/README.md),
+with the host install removed: no `useradd`, no `uv tool install`, no
+credentials on the host outside the mounts the compose file already declares.
+The unit's only dependency is the container runtime.
+
+```ini
+# /etc/systemd/system/cadastre-collect.service
+[Unit]
+Description=Cadastre — collect observed evidence from the estate
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/cadastre
+ExecStart=/usr/bin/docker compose --env-file /srv/cadastre/.env \
+  -f /srv/cadastre/compose.production.yaml \
+  --profile collector run --rm cadastre-collector
+# A hung plugin must not wedge the timer; the plugin runner has its own
+# per-call timeout, this is the backstop for the whole run.
+TimeoutStartSec=15min
+```
+
+```ini
+# /etc/systemd/system/cadastre-collect.timer
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+`Persistent=true` is the reason to prefer this over cron on a host that reboots
+or suspends: a missed run fires on the next boot instead of waiting for the
+next slot, which matters when the interval is close to the freshness threshold.
+The container-level hardening that `examples/collector/`'s unit applies to the
+host process (`ProtectSystem`, `NoNewPrivileges`, and the rest) is already in
+`compose.production.yaml` as `read_only`, `cap_drop: [ALL]`,
+`no-new-privileges`, and a non-root `user:` — applying it to the `docker`
+client as well buys nothing and will break the socket connection.
+
+### 8.4 Kubernetes CronJob
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cadastre-collect
+spec:
+  schedule: "17 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+          containers:
+            - name: collector
+              image: ghcr.io/<owner>/cadastre@sha256:<pinned digest>
+              command: [python, /app/scripts/infisical-entrypoint.py]
+              args: [cadastre, collect]
+              env:
+                - name: CADASTRE_DATA_DIR
+                  value: /var/lib/cadastre
+                - name: INFISICAL_CLIENT_ID_FILE
+                  value: /run/cadastre/infisical/client_id
+                - name: INFISICAL_CLIENT_SECRET_FILE
+                  value: /run/cadastre/infisical/client_secret
+              securityContext:
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: data, mountPath: /var/lib/cadastre}
+                - {name: tmp, mountPath: /tmp}
+                - {name: infisical, mountPath: /run/cadastre/infisical, readOnly: true}
+          volumes:
+            - name: tmp
+              emptyDir: {medium: Memory, sizeLimit: 64Mi}
+            - name: data
+              persistentVolumeClaim: {claimName: cadastre-data}
+            - name: infisical
+              secret: {secretName: cadastre-infisical, defaultMode: 0400}
+```
+
+`concurrencyPolicy: Forbid` is not optional. The collector writes
+`observed.sqlite3` on the same volume the API and MCP pods read, and two
+overlapping runs against one SQLite file is the case the storage contract does
+not cover. A slow upstream that makes a run overrun its schedule is precisely
+when a second run would otherwise start.
+
+The data volume is the same claim the query pods mount, which on an RWO class
+pins the CronJob to their node. That constraint is real and worth recording in
+the topology matrix rather than discovering when the job goes unschedulable.
+The in-memory `/tmp` is the compose `tmpfs` entry, which
+`readOnlyRootFilesystem` would otherwise take away.
+
+The credential mount is a Secret projected as files, matching the entrypoint's
+`_FILE` convention; the plain `INFISICAL_CLIENT_ID`/`INFISICAL_CLIENT_SECRET`
+variables exist only for deployment mechanisms with no secret-file mount to
+offer, and Kubernetes is not one of them.
+
+### 8.5 Verifying that collection actually happens
+
+Three checks, in order, because each rules out something the next one cannot.
+
+1. **Run it once by hand.** `docker compose --profile collector run --rm
+   cadastre-collector` prints one row per configured source. Every row should
+   read `ok`; a `STALE` row names the source and the error, and the run still
+   exits `0`.
+2. **`GET /sources`** (or `cadastre sources`) runs the `plugin.info` handshake
+   live against every configured source. It separates "not configured" from
+   "configured and failing" — but it says nothing about when anything was last
+   collected, and a stack that has never collected once still reports every
+   source `ok`. It is the second check, never the only one.
+3. **Read a query's provenance.** `GET /brief`, or any answer, carries a
+   `provenance` entry per source with `as_of`, `ttl_seconds`, and `stale`. A
+   recent `as_of` is the only evidence that a scheduled run wrote something.
+   `GET /stale` is the same information filtered to what has aged past its
+   threshold, and is the cheapest thing to put on a recurring check.
+
+### 8.6 Choosing the interval
+
+A source collected less often than its freshness threshold renders as `STALE`,
+correctly and permanently. The default threshold is 24 hours and individual
+capabilities are tighter (`BUILTIN_PLUGINS.md`); `freshness:` in the plugin
+configuration overrides them per source. Match the interval to the tightest
+threshold the estate actually acts on, and loosen the thresholds it does not —
+an hourly timer against a 15-minute threshold produces a source that is stale
+three quarters of the time and teaches everyone to ignore the flag.
+
+## 9. Product versus environment
 
 Product guarantees are defined in `ARCHITECTURE.md`, `DESIGN.md`, and the
 application tests. Environment facts belong in the ops/deployment evidence:
