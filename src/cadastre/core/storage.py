@@ -26,7 +26,7 @@ from cadastre.core.errors import Located, UsageError
 from cadastre.core.loader import IssueCollector, parse_entity
 from cadastre.core.migrations import CURRENT_SCHEMA
 from cadastre.core.migrations import apply as apply_migrations
-from cadastre.core.provenance import format_timestamp
+from cadastre.core.provenance import format_timestamp, parse_timestamp
 from cadastre.core.serialize import entity_to_dict
 from cadastre.modules.registry import EntityRegistry, active_registry, base_registry
 
@@ -721,19 +721,40 @@ def initialize(data_dir: Path) -> dict[str, Any]:
         }
 
 
-def startup_check(data_dir: Path) -> dict[str, Any]:
-    """Validate runtime storage before a listener is exposed."""
-    from cadastre.core.lifecycle import degraded, ready
+def startup_check(data_dir: Path, *, now: datetime | None = None) -> dict[str, Any]:
+    """Validate runtime storage before a listener is exposed.
 
+    `now` is the clock staleness is judged against; the wall clock by default.
+    Passing it is how tests age a source deterministically.
+    """
+    from cadastre.core.lifecycle import degraded, ready
+    from cadastre.core.observed import provenance_of
+    from cadastre.core.observed_db import load_sources
+    from cadastre.plugins.config import load_plugins
+
+    moment = now or datetime.now(tz=UTC)
     with RuntimeStore.open(data_dir, read_only=True) as runtime:
         result = integrity(data_dir)
         result["revisions"] = runtime.revisions()
         source_rows = runtime.observed.execute(
             "SELECT ok FROM sources ORDER BY source"
         ).fetchall()
+        # Staleness is not recomputed here.  The probe asks the same evaluator
+        # every query answer's provenance block asks, because two independent
+        # freshness calculations are exactly how readiness came to report
+        # `ready` while every answer it served reported `stale`.
+        provenance = provenance_of(
+            load_sources(data_dir),
+            now=moment,
+            ttl_overrides=load_plugins(data_dir).freshness,
+        )
         result["observed_freshness"] = {
             "sources": len(source_rows),
             "failed_sources": sum(not bool(row[0]) for row in source_rows),
+            "stale_sources": sum(item.stale for item in provenance),
+            "oldest_as_of": min(
+                (item.as_of for item in provenance), key=parse_timestamp, default=None
+            ),
         }
     usage = shutil.disk_usage(data_dir)
     if usage.free <= 0:
@@ -745,9 +766,14 @@ def startup_check(data_dir: Path) -> dict[str, Any]:
     result["free_bytes"] = usage.free
     result["application_version"] = __import__("cadastre").__version__
     result.pop("data_dir", None)
+    freshness = result["observed_freshness"]
+    # Stale degrades; it never fails.  A catalog whose collectors stopped still
+    # answers, and DESIGN §2.9 makes freshness a reported axis rather than a
+    # gate — the probe announces that the evidence is old and leaves the
+    # decision with the caller, the same footing a failed source already had.
     health = (
         degraded(result)
-        if result["observed_freshness"]["failed_sources"]
+        if freshness["failed_sources"] or freshness["stale_sources"]
         else ready(data_dir, result)
     )
     return {**result, "lifecycle": health.to_dict()}

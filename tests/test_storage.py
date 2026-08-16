@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -244,6 +245,52 @@ def test_startup_health_does_not_expose_the_runtime_path(tmp_path: Path) -> None
     result = startup_check(root)
     assert "data_dir" not in result
     assert result["lifecycle"]["state"] == "ready"
+
+
+def test_readiness_degrades_once_a_source_ages_past_its_ttl(tmp_path: Path) -> None:
+    """Regression: readiness counted only sources that *failed* their last
+    attempt, so collectors that simply stopped running left the probe green
+    while every answer served reported the same sources stale."""
+    from cadastre.core.provenance import DEFAULT_TTL_BY_CAPABILITY, format_timestamp
+    from cadastre.core.storage import startup_check
+
+    root = _runtime(tmp_path)
+    collected = datetime(2026, 8, 11, 10, 26, 46, tzinfo=UTC)
+    host = load_catalog(root).get("host", "app-01")
+    assert host is not None
+    record_source(
+        root,
+        ObservedSource(
+            source="inventory",
+            plugin="fixture",
+            as_of=format_timestamp(collected),
+            capabilities=("inventory.list",),
+            entities={"host": [host]},
+            ok=True,
+        ),
+    )
+    ttl = timedelta(seconds=DEFAULT_TTL_BY_CAPABILITY["inventory.list"])
+
+    fresh = startup_check(root, now=collected + ttl - timedelta(minutes=1))
+    assert fresh["lifecycle"]["state"] == "ready"
+    assert fresh["observed_freshness"] == {
+        "sources": 1,
+        "failed_sources": 0,
+        "stale_sources": 0,
+        "oldest_as_of": "2026-08-11T10:26:46Z",
+    }
+
+    # Nothing changed but the clock: the collector stopped running.
+    stale = startup_check(root, now=collected + ttl + timedelta(minutes=1))
+    assert stale["lifecycle"]["state"] == "degraded"
+    assert stale["observed_freshness"] == {
+        "sources": 1,
+        # Its last recorded attempt still succeeded — the old signal alone
+        # would still call this ready.
+        "failed_sources": 0,
+        "stale_sources": 1,
+        "oldest_as_of": "2026-08-11T10:26:46Z",
+    }
 
 
 def test_export_is_deterministic_and_round_trips_history(tmp_path: Path) -> None:
