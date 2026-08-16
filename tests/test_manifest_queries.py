@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from cadastre.cli.manifest import backlog, drift, next_, projects, repo, why
+from cadastre.cli.manifest import backlog, brief, drift, next_, projects, repo, why
 from cadastre.cli.session import Session
 
 
@@ -261,3 +261,58 @@ def test_projects_is_byte_stable_when_collector_payload_is_reordered(
     # Paths are intentionally absent from these checkout records, so payload
     # order is the only variable and the rendered answer must remain identical.
     assert first == second
+
+
+def _session_with_n_items(tmp_path: Path, count: int) -> Session:
+    declared = tmp_path / "declared" / "work-items"
+    declared.mkdir(parents=True)
+    (tmp_path / "modules.yaml").write_text(
+        "modules:\n  manifest:\n    enabled: true\n", encoding="utf-8"
+    )
+    for index in range(count):
+        (declared / f"w{index:04d}.yaml").write_text(
+            f"id: w{index:04d}\ntitle: Work item {index} with a realistic title\n"
+            "state: open\npriority: p2\ncreated_at: '2026-08-01T00:00:00Z'\n",
+            encoding="utf-8",
+        )
+    return Session.open_fixture(tmp_path, now=datetime(2026, 8, 10, tzinfo=UTC))
+
+
+def test_brief_payload_does_not_grow_with_the_register(tmp_path: Path) -> None:
+    """A brief is counts and confidence, so its size is a property, not a case.
+
+    Asserted against register size rather than against one known payload: a
+    projection that embeds ranked items passes any single-instance check on a
+    small fixture and still exceeds a client's result limit in production.
+    """
+    from cadastre.render.json_out import render
+
+    small = render(brief(_session_with_n_items(tmp_path / "small", 2)))
+    large = render(brief(_session_with_n_items(tmp_path / "large", 200)))
+
+    # 198 extra items may only cost the digits the counts grew by.
+    assert len(large) - len(small) < 16
+
+
+def test_brief_carries_counts_and_confidence_but_no_item_list(
+    tmp_path: Path,
+) -> None:
+    document = brief(_session_with_n_items(tmp_path, 3))
+
+    assert document.data == {
+        "counts": {"work_items": 3, "open": 3},
+        "confidence": "declared-only",
+    }
+
+
+def test_brief_section_keeps_its_three_field_summary(tmp_path: Path) -> None:
+    from cadastre.render.document import Fields
+
+    section = brief(_session_with_n_items(tmp_path, 3)).sections[0]
+    fields = [block for block in section.blocks if isinstance(block, Fields)]
+
+    assert [name for name, _ in fields[0].items] == [
+        "work items",
+        "open",
+        "confidence",
+    ]

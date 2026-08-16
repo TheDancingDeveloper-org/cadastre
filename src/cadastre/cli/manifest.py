@@ -81,15 +81,19 @@ def brief(session: Session) -> Document:
                 ),
                 note=(
                     "External forge and deployment evidence is not included "
-                    "in this projection."
+                    "in this projection. Item lists come from "
+                    "`manifest backlog` and `manifest next`, which are bounded."
                 ),
             ),
         ),
         provenance=session.provenance(),
+        # A brief is counts and confidence, not contents: its size must not
+        # grow with the register, or the session preamble every agent is told
+        # to call first is the call most likely to exceed a client's result
+        # limit. Ranked items are served by `backlog`/`next`, which bound them.
         data={
             "counts": {"work_items": len(ranked), "open": len(open_items)},
             "confidence": "declared-only",
-            "items": [_item_data(result) for result in ranked],
         },
     )
 
