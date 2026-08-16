@@ -11,6 +11,17 @@ desired state, not ours. Putting it in `declared/` would make Cadastre's own
 statement of intent a copy of somebody else's, and drift between the two would
 become invisible — which is precisely the divergence worth seeing.
 
+**`as_of` is the checkout's age, not the run's.** Every other collector calls a
+live API, so the moment it ran and the moment the facts were true are the same
+moment. This one reads a clone that somebody else refreshes out of band, and
+nothing here fetches it — so stamping the run time would report a five-day-old
+tree as fresh, and the TTL clock would reset on every scheduled run while the
+data stood still. The reply's `as_of` is therefore the resolved commit's
+committer date (falling back to when HEAD last moved locally), which makes the
+ordinary staleness machinery judge the *data's* age: a checkout older than the
+source's TTL is stale, however recently the collector ran. The resolved commit
+is reported in `extra.checkout` so a reader can see which tree was read.
+
 Config:
 
 ```yaml
@@ -30,7 +41,7 @@ from typing import Any
 from cadastre.core.artifacts import CADASTRE_KEY
 from cadastre.core.provenance import format_timestamp
 from cadastre.core.yamlio import load_yaml
-from cadastre.plugins.collectors import serve_collector
+from cadastre.plugins.collectors import gitfiles, serve_collector
 from cadastre.plugins.collectors.http import HttpError
 from cadastre.plugins.protocol import Reply, Request, ok
 
@@ -131,6 +142,53 @@ def scan(root: Path, options: dict[str, Any]) -> dict[str, Any]:
     return {"entities": {"service": unique}}
 
 
+#: The one warning that matters here: without it, an unknown age is
+#: indistinguishable from a fresh read.
+UNKNOWN_AGE = (
+    "cannot read the checkout's age; as_of is the collection run, not the data. "
+    "Refresh the checkout before each run"
+)
+
+
+def checkout_state(root: Path) -> dict[str, Any]:
+    """Which commit was read, and when its contents became true.
+
+    `basis` names which answer the caller is getting, because the three are not
+    interchangeable: `commit` is the committer date of the resolved commit,
+    `checkout` is when HEAD last moved locally (used when the commit is packed
+    and so unreadable without invoking Git), and `collection` means neither
+    could be read and the age is unknown.
+    """
+    state: dict[str, Any] = {"path": str(root), "basis": "collection"}
+    try:
+        git = gitfiles.git_dir(root)
+        revision, branch = gitfiles.head(git)
+    except (ValueError, OSError):
+        return state
+    state["commit"] = revision
+    if branch:
+        state["branch"] = branch
+    committed = gitfiles.committed_at(git, revision)
+    if committed:
+        state["committed_at"] = committed
+    moved = gitfiles.last_head_change(git)
+    if moved:
+        state["last_head_change"] = moved
+    if committed:
+        state["basis"] = "commit"
+    elif moved:
+        state["basis"] = "checkout"
+    return state
+
+
+def _as_of(state: dict[str, Any]) -> str | None:
+    if state["basis"] == "commit":
+        return str(state["committed_at"])
+    if state["basis"] == "checkout":
+        return str(state["last_head_change"])
+    return None
+
+
 def _collect(request: Request) -> Reply:
     raw_path = request.config.get("path")
     if not raw_path:
@@ -140,7 +198,15 @@ def _collect(request: Request) -> Reply:
     root = Path(str(raw_path)).expanduser()
     if not root.is_dir():
         raise HttpError("unreachable", f"no such directory: {root}")
-    return ok(scan(root, request.config), format_timestamp(datetime.now(tz=UTC)))
+    state = checkout_state(root)
+    result = scan(root, request.config)
+    result["extra"] = {"checkout": state}
+    as_of = _as_of(state)
+    return ok(
+        result,
+        as_of or format_timestamp(datetime.now(tz=UTC)),
+        () if as_of else (UNKNOWN_AGE,),
+    )
 
 
 def main() -> int:

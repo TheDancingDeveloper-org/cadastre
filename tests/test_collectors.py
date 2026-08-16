@@ -14,6 +14,8 @@ import json
 import os
 import re
 import sys
+import zlib
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -21,7 +23,8 @@ from unittest import mock
 import pytest
 
 from cadastre.core.errors import Located
-from cadastre.core.observed import parse_source
+from cadastre.core.observed import ObservedSource, parse_source
+from cadastre.core.provenance import evaluate, format_timestamp
 from cadastre.plugins.collectors import (
     ci_woodpecker,
     dns_cloudflare,
@@ -1421,6 +1424,119 @@ def test_the_ops_repo_does_not_guess_a_host_from_a_directory_name(
     service = result["entities"]["service"][0]
     assert "runs_on" not in service
     assert service["id"] == "forgejo"
+
+
+REVISION = "a1b2c3d4" * 5
+
+
+def _ops_checkout(root: Path, *, committed: datetime | None = None) -> Path:
+    """A checkout with one stack, HEAD on `REVISION`, no Git executable in it.
+
+    `committed` writes the loose commit object HEAD names; omitting it leaves
+    HEAD pointing at an object that is not there, which is what a packed
+    repository looks like to a reader that will not shell out to Git.
+    """
+    stack = root / "notes"
+    stack.mkdir(parents=True)
+    (stack / "compose.yaml").write_text(
+        "services:\n  notes-api:\n    image: x\n", encoding="utf-8"
+    )
+    git = root / ".git"
+    (git / "refs/heads").mkdir(parents=True)
+    (git / "HEAD").write_text("ref: refs/heads/main\n", encoding="ascii")
+    (git / "refs/heads/main").write_text(REVISION + "\n", encoding="ascii")
+    if committed is not None:
+        seconds = str(int(committed.timestamp())).encode("ascii")
+        body = (
+            b"tree " + b"0" * 40 + b"\n"
+            b"author Ops <ops@example.invalid> " + seconds + b" +0000\n"
+            b"committer Ops <ops@example.invalid> " + seconds + b" +0000\n"
+            b"\nreconcile\n"
+        )
+        raw = b"commit " + str(len(body)).encode("ascii") + b"\0" + body
+        loose = git / "objects" / REVISION[:2]
+        loose.mkdir(parents=True)
+        (loose / REVISION[2:]).write_bytes(zlib.compress(raw))
+    return git
+
+
+def test_an_ops_checkout_older_than_the_ttl_is_stale_although_the_run_is_new(
+    tmp_path: Path,
+) -> None:
+    """The bug this closes: nothing fetches the clone, so stamping `as_of`
+    with the collection run reported a week-old tree as fresh, and a scheduled
+    run reset the TTL clock while the data stood still. `as_of` is the
+    resolved commit's date, so the ordinary staleness machinery judges the
+    data's age rather than the run's.
+    """
+    committed = datetime(2026, 8, 11, 6, 9, tzinfo=UTC)
+    now = datetime(2026, 8, 16, 10, 27, tzinfo=UTC)  # five days later, run now
+    _ops_checkout(tmp_path, committed=committed)
+
+    reply = orchestrator_gitops._collect(
+        Request(method="inventory.list", config={"path": str(tmp_path)})
+    )
+
+    assert reply.as_of == format_timestamp(committed)
+    assert reply.warnings == ()
+    assert reply.result["extra"]["checkout"] == {
+        "path": str(tmp_path),
+        "basis": "commit",
+        "commit": REVISION,
+        "branch": "main",
+        "committed_at": format_timestamp(committed),
+    }
+    source = ObservedSource(
+        source="orchestrator",
+        plugin=orchestrator_gitops.NAME,
+        as_of=reply.as_of or "",
+        capabilities=("inventory.list",),
+    )
+    assert evaluate(source.provenance(), now).stale is True
+
+
+def test_a_packed_head_dates_the_ops_checkout_by_when_it_last_moved(
+    tmp_path: Path,
+) -> None:
+    """A cloned repository keeps its commits in a packfile, which cannot be
+    read without delta resolution. The reflog is a plain file and says when
+    the checkout last took delivery, so the age stays honest."""
+    git = _ops_checkout(tmp_path)
+    (git / "logs").mkdir()
+    (git / "logs/HEAD").write_text(
+        f"{'0' * 40} {REVISION} Ops <ops@example.invalid> 1786428540 +0000\tclone\n",
+        encoding="utf-8",
+    )
+
+    reply = orchestrator_gitops._collect(
+        Request(method="inventory.list", config={"path": str(tmp_path)})
+    )
+
+    assert reply.warnings == ()
+    checkout = reply.result["extra"]["checkout"]
+    assert checkout["basis"] == "checkout"
+    assert checkout["commit"] == REVISION
+    assert "committed_at" not in checkout
+    assert reply.as_of == checkout["last_head_change"] == "2026-08-11T06:09:00Z"
+
+
+def test_an_ops_directory_that_is_not_a_checkout_says_its_age_is_unknown(
+    tmp_path: Path,
+) -> None:
+    """An unknown age must not be indistinguishable from a fresh read."""
+    stack = tmp_path / "notes"
+    stack.mkdir()
+    (stack / "compose.yaml").write_text(
+        "services:\n  notes-api:\n    image: x\n", encoding="utf-8"
+    )
+
+    reply = orchestrator_gitops._collect(
+        Request(method="inventory.list", config={"path": str(tmp_path)})
+    )
+
+    assert reply.warnings == (orchestrator_gitops.UNKNOWN_AGE,)
+    assert reply.result["extra"]["checkout"]["basis"] == "collection"
+    assert reply.result["entities"]["service"][0]["id"] == "notes"
 
 
 def test_orchestrator_plugin_info_declares_the_x_orchestrator_schema() -> None:

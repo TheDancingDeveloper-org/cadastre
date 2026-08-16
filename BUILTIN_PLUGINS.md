@@ -25,7 +25,7 @@ plugin name for identity matching and their configured source id for provenance.
 | `forge-github` | GitHub API | `vcs.repos`, `ci.pipelines`, `ci.status` | repo, pipeline, ci_executor, ci_pool; runner evidence, optional workflow selectors and job history in `extra` | read-only metadata token; org self-hosted-runner read for `ci.status`; repo `Contents`/`Actions: read` for the optional sections | 1 day; 15 min for `ci.status` |
 | `ci-woodpecker` | Woodpecker API | `ci.pipelines`, `secret.list` | pipeline; secret names in `extra` | read-only API token | 1 day |
 | `secrets-infisical` | Infisical API | `secret.list` | secret and secret names | read-only workspace token | 1 day |
-| `orchestrator-gitops` | local GitOps checkout | `inventory.list` | service | filesystem read | 1 hour |
+| `orchestrator-gitops` | local GitOps checkout | `inventory.list` | service | filesystem read | 1 hour, measured from the checkout's commit |
 | `dns-cloudflare` | Cloudflare API | `dns.zones`, `dns.records` | domain | Zone:Read token | 1 hour |
 | `vpn-tailscale` | Tailscale API | `network.list`, `network.members` | network, host | devices read token | 1 day |
 | `hypervisor-proxmox` | Proxmox API | `inventory.list` | host | `PVEAuditor`-equivalent token | 1 day |
@@ -337,6 +337,23 @@ really are hosts), and `repo`. It needs filesystem read access, no
 environment variable or network access, and never runs an orchestrator. It
 does not read live controller state, secrets, or infer a host from
 directories by default.
+
+**The operator must refresh the checkout before each collection run.** Nothing
+in Cadastre fetches it: this plugin reads the working tree it is pointed at and
+never writes to it, and a scheduled collection against a clone nobody pulls
+reads the same commit every time. Run the refresh (`git -C <path> pull
+--ff-only`, or whatever the estate's sync mechanism is) immediately before
+`cadastre collect`, from the same job.
+
+Failing to do so is visible rather than silent. `as_of` for this source is the
+age of the *data*, not of the run: the committer date of the commit the
+checkout resolves to, or — when that commit is packed, which a plain `git
+clone` leaves it — when HEAD last moved locally. So a checkout older than the
+source's `freshness` TTL is reported stale by the ordinary staleness rule,
+however recently the collector ran, and `extra.checkout` names the commit,
+branch and which of the two timings the age came from (`basis`). A directory
+that is not a readable Git checkout falls back to the run time and returns a
+warning saying the age is unknown; treat that warning as a broken source.
 
 ```yaml
 - id: gitops
