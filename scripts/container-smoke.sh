@@ -9,6 +9,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(dirname "$script_dir")
 volume="cadastre-smoke-$$"
 restored_volume="cadastre-smoke-restored-$$"
+bundle_volume="cadastre-smoke-bundle-$$"
 bundle="$root/tests/fixtures/container-smoke-bundle"
 test -r "$bundle/manifest.json"
 smoke_curl_config=$(mktemp)
@@ -17,16 +18,30 @@ smoke_lookup=$(mktemp)
 smoke_mcp=$(mktemp)
 cleanup() {
   rm -f "$smoke_curl_config" "$smoke_brief" "$smoke_lookup" "$smoke_mcp"
-  docker volume rm "$volume" "$restored_volume" >/dev/null 2>&1 || true
+  docker volume rm "$volume" "$restored_volume" "$bundle_volume" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 docker volume create "$volume" >/dev/null
 docker volume create "$restored_volume" >/dev/null
+docker volume create "$bundle_volume" >/dev/null
+
+# The bundle reaches the container through the Docker API, not through a bind
+# mount of this checkout. The release job runs on a Docker-in-Docker worker,
+# where the daemon does not share this filesystem: `-v "$bundle:..."` is
+# resolved by the daemon, finds nothing at that path, and mounts an empty
+# directory — so the readable-here check above passes and `init` then reports
+# no bundle. `docker cp` streams the files over the socket and does not care
+# whose filesystem they came from. Every other volume in this script is
+# already a named one for the same reason.
+staging=$(docker create -v "$bundle_volume:/tmp/container-smoke-bundle" \
+  --entrypoint sh "$image" -c true)
+docker cp "$bundle/." "$staging:/tmp/container-smoke-bundle/"
+docker rm "$staging" >/dev/null
 
 docker run --rm \
   --user 10001:10001 \
   -v "$volume:/var/lib/cadastre" \
-  -v "$bundle:/tmp/container-smoke-bundle:ro" \
+  -v "$bundle_volume:/tmp/container-smoke-bundle:ro" \
   "$image" init --data-dir /var/lib/cadastre \
   --from-bundle /tmp/container-smoke-bundle --json
 docker run --rm \
