@@ -9,7 +9,7 @@ The version recorded here is `application_version` in
 `src/cadastre/release-compatibility.json`, which is attested to every released
 image as the schema-compatibility predicate.
 
-## Unreleased
+## v0.2.1
 
 ### Added
 
@@ -72,6 +72,16 @@ image as the schema-compatibility predicate.
 
 ### Changed
 
+- `manifest brief` no longer carries the register in its payload. It was
+  documented as the compressed session preamble, and its JSON projection
+  embedded every ranked work item with no limit — 157,967 characters on a
+  register of 444 open items, which exceeded MCP client result limits and
+  failed the call outright. The command every agent is told to run first was
+  the one most likely to fail, and it failed where the agent had the least
+  context to recover. `brief` is now counts and confidence, which is what the
+  documentation always described; `backlog` and `next` serve item lists and
+  have taken a bounded `limit` all along.
+
 - `orchestrator-gitops` dates its evidence by the checkout it read, not by the
   run that read it. `as_of` is now the resolved commit's committer date
   (falling back to when HEAD last moved locally), and `extra.checkout` records
@@ -102,6 +112,32 @@ image as the schema-compatibility predicate.
   signed.
 - `release-compatibility.json` moved to `src/cadastre/` so it ships inside the
   wheel and the running server can answer from it.
+
+### Fixed
+
+- **The MCP surface no longer disagrees with its own schema.** The transport
+  rejected an explicit `null` for every optional argument while the published
+  schema advertised those arguments as nullable with a `null` default and the
+  core accepted `None`, so a client that materialises defaults rather than
+  omitting absent keys was refused for sending exactly what it was told to
+  send. `check` also never published the four `kind` values it accepts, so the
+  only way to discover the set was to send a wrong one and read the error;
+  together the two meant a client following only the published schema could
+  not call `check` at all. Argument types are now decided in one place that
+  both the schema generator and the transport validator read, and the `kind`
+  enum is generated from the parser registry, so a new parser cannot be added
+  without the schema following it. The OpenAPI document for `POST /check`
+  carries the same enum.
+- **`/health/ready` can now detect stale observations.** `observed_freshness`
+  counted sources and how many failed at their last recorded attempt, but never
+  compared `as_of + ttl_seconds` against now, so a collector that stopped
+  running entirely left readiness reporting `ok` indefinitely — observed on a
+  live instance five days stale against a 24h TTL, with every query answered by
+  that same instance correctly reporting eight of nine sources as stale. It now
+  reports `stale_sources` and `oldest_as_of` and degrades lifecycle on
+  staleness as it already did on failure, reusing the TTL evaluation the query
+  path performs rather than repeating it. A stale catalog still serves reads
+  while announcing that it is stale.
 
 ### Removed
 
