@@ -835,7 +835,9 @@ always the literal `declared-only`.
   answer. Stale, incomplete, contested, and unknown evidence appears before
   ranked or actionable content in text output.
 - Base `cadastre brief` stays unchanged. `manifest brief` is the module's
-  compressed session preamble.
+  compressed session preamble: counts and confidence only, in text and in the
+  JSON projection, so its size does not grow with the register. Ranked item
+  lists come from `backlog` and `next`, which take a bounded limit.
 
 **Touches:** `application/queries.py:19` for the six operations,
 `api/registry.py` for their metadata, and new `src/cadastre/cli/manifest.py`

@@ -186,7 +186,7 @@ without the module.
 
 | Command | Purpose |
 |---|---|
-| `manifest brief` | The register, compressed. The module's session preamble. |
+| `manifest brief` | The register, compressed: counts and confidence, not contents. The module's session preamble, and bounded regardless of register size. |
 | `manifest projects` | One row per declared repository, including empty backlogs, checkout liveness, and unmatched checkout findings. |
 | `manifest backlog` | Ranked work, filtered by `--state`, `--initiative`, `--repo`, bounded by `--limit`. |
 | `manifest next` | The top eligible, unblocked items. |
