@@ -10,6 +10,28 @@ from dataclasses import dataclass
 from typing import Any
 
 from cadastre.api.contract import RouteContract
+from cadastre.core.artifacts import artifact_kinds
+
+# The one place an argument's JSON type is decided. Schema generation and
+# transport validation both read it, so the schema a client is handed and the
+# check that client's call is measured against cannot drift apart.
+ARGUMENT_TYPES: dict[str, str] = {
+    "limit": "integer",
+    "summary_only": "boolean",
+    "record": "object",
+}
+
+_JSON_TO_PYTHON: dict[str, type] = {
+    "integer": int,
+    "boolean": bool,
+    "object": dict,
+    "string": str,
+}
+
+
+def argument_type(name: str) -> type:
+    """The Python type an argument's JSON type maps to."""
+    return _JSON_TO_PYTHON[ARGUMENT_TYPES.get(name, "string")]
 
 
 @dataclass(frozen=True)
@@ -23,25 +45,47 @@ class Operation:
     method: str = "GET"
     request_fields: tuple[str, ...] = ()
     required_request_fields: tuple[str, ...] = ()
+    # Closed value sets, keyed by argument name. Generated from the module that
+    # owns the set, never restated here.
+    argument_enums: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+    def required_argument_names(self) -> tuple[str, ...]:
+        if self.required_arguments is None:
+            return self.arguments
+        return self.required_arguments
 
     def input_schema(self) -> dict[str, Any]:
-        scalar_types = {
-            "limit": "integer",
-            "summary_only": "boolean",
-            "record": "object",
-        }
+        required = self.required_argument_names()
+        enums = dict(self.argument_enums)
+        properties: dict[str, Any] = {}
+        for name in self.arguments:
+            schema: dict[str, Any] = {"type": ARGUMENT_TYPES.get(name, "string")}
+            if name in enums:
+                schema["enum"] = list(enums[name])
+            if name not in required:
+                # An optional argument is one a client may send as an explicit
+                # null. Saying so in the schema is what lets a client that
+                # materialises defaults rather than omitting keys call the
+                # tool at all — and the transport accepts exactly this.
+                schema = {"anyOf": [schema, {"type": "null"}], "default": None}
+            properties[name] = schema
         return {
             "type": "object",
-            "properties": {
-                name: {"type": scalar_types.get(name, "string")}
-                for name in self.arguments
-            },
-            "required": list(
-                self.arguments
-                if self.required_arguments is None
-                else self.required_arguments
-            ),
+            "properties": properties,
+            "required": list(required),
         }
+
+    def request_field_schema(self, field: str) -> dict[str, Any]:
+        """The published schema for one HTTP request field.
+
+        Shares its type and enum with `input_schema` so the OpenAPI document
+        and the MCP tool list describe the same operation.
+        """
+        schema: dict[str, Any] = {"type": ARGUMENT_TYPES.get(field, "string")}
+        enums = dict(self.argument_enums)
+        if field in enums:
+            schema["enum"] = list(enums[field])
+        return schema
 
     def contract(self) -> RouteContract:
         if self.route is None:
@@ -69,6 +113,7 @@ MCP_OPERATIONS: tuple[Operation, ...] = (
         "catalog.check",
         arguments=("artifact", "kind", "path"),
         required_arguments=("artifact",),
+        argument_enums=(("kind", artifact_kinds()),),
     ),
     Operation(
         "lookup",
@@ -239,6 +284,7 @@ HTTP_ROUTES: tuple[Operation, ...] = (
         method="POST",
         request_fields=("artifact", "kind", "path"),
         required_request_fields=("artifact",),
+        argument_enums=(("kind", artifact_kinds()),),
     ),
     Operation(
         "add",

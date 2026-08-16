@@ -15,7 +15,7 @@ from cadastre.application.queries import QueryService
 from cadastre.core.errors import CadastreError
 from cadastre.mcp.drift import drift
 from cadastre.mcp.observations import observations
-from cadastre.mcp.sdk import error_kind, register
+from cadastre.mcp.sdk import ArtifactKind, error_kind, register
 from cadastre.mcp.writes import WRITE_TOOLS, write_mode_enabled
 from cadastre.render import json_out
 
@@ -118,7 +118,7 @@ def context_for(intent: str) -> str:
     )
 
 
-def check(artifact: str, kind: str | None = None) -> str:
+def check(artifact: str, kind: ArtifactKind | None = None) -> str:
     """Check an artifact before commit and report actionable policy and
     placement findings."""
     return _answer(

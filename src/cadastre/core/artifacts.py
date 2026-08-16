@@ -506,13 +506,22 @@ _PARSERS = {
 }
 
 
+def artifact_kinds() -> tuple[str, ...]:
+    """The artifact kinds `check` accepts.
+
+    Adapters publish this as the parameter's enum rather than restating the
+    set, so a new parser cannot be registered without the schema following it.
+    """
+    return tuple(sorted(_PARSERS))
+
+
 def parse(path: Path, kind: str | None = None) -> Artifact:
     resolved = kind or infer_kind(path)
     parser = _PARSERS.get(resolved)
     if parser is None:
         raise UsageError(
             f"unknown artifact kind {resolved!r}; expected one of: "
-            + ", ".join(sorted(_PARSERS))
+            + ", ".join(artifact_kinds())
         )
     # Rendered documents cross process and network boundaries.  Keep source
     # paths out of the canonical identity so CLI, HTTP, and MCP answers remain

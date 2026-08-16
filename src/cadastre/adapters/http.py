@@ -142,7 +142,7 @@ def _openapi_operation(
                 "name": field,
                 "in": "path" if f"{{{field}}}" in operation.route else "query",
                 "required": field in operation.required_request_fields,
-                "schema": {"type": "string"},
+                "schema": operation.request_field_schema(field),
             }
             for field in operation.request_fields
         ]
@@ -155,7 +155,7 @@ def _openapi_operation(
                         "type": "object",
                         "required": list(operation.required_request_fields),
                         "properties": {
-                            field: {"type": "object" if field == "record" else "string"}
+                            field: operation.request_field_schema(field)
                             for field in operation.request_fields
                         },
                     }

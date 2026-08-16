@@ -28,9 +28,11 @@ from cadastre.adapters.security import (
     certificate_common_name,
 )
 from cadastre.api.registry import (
+    ARGUMENT_TYPES,
     MANIFEST_MCP_OPERATIONS,
     MCP_OPERATIONS,
     MCP_WRITE_OPERATIONS,
+    argument_type,
 )
 from cadastre.application.checks import CheckService
 from cadastre.application.context import ApplicationContext
@@ -415,25 +417,28 @@ class _Handler(BaseHTTPRequestHandler):
         unexpected = sorted(set(arguments) - set(operation.arguments))
         if unexpected:
             raise UsageError(f"{name} does not accept argument {unexpected[0]!r}")
+        required = operation.required_argument_names()
         missing = [
-            key for key in (operation.required_arguments or ()) if key not in arguments
+            key
+            for key in (operation.required_arguments or ())
+            if key not in arguments or arguments[key] is None
         ]
         if missing:
             raise UsageError(f"{name} needs argument {missing[0]!r}")
-        type_names = {bool: "boolean", int: "integer", dict: "object", str: "string"}
         for key, value in arguments.items():
-            expected: type = (
-                bool
-                if key == "summary_only"
-                else int
-                if key == "limit"
-                else dict
-                if key == "record"
-                else str
-            )
-            if not isinstance(value, expected):
+            if value is None and key not in required:
+                # The schema publishes optional arguments as nullable with a
+                # null default, and the core accepts None. Rejecting the value
+                # a client was told to send is the transport disagreeing with
+                # its own advertisement.
+                continue
+            expected = argument_type(key)
+            if not isinstance(value, expected) or (
+                expected is int and isinstance(value, bool)
+            ):
                 raise UsageError(
-                    f"{name} argument {key!r} must be a {type_names[expected]}"
+                    f"{name} argument {key!r} must be a "
+                    f"{ARGUMENT_TYPES.get(key, 'string')}"
                 )
 
 

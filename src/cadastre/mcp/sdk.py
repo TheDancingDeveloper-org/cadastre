@@ -5,14 +5,23 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Iterable
 from functools import wraps
-from typing import Any
+from typing import Annotated, Any
 
+from pydantic import Field
+
+from cadastre.core.artifacts import artifact_kinds
 from cadastre.core.errors import (
     AmbiguousEntityError,
     MissingEntityError,
     UnknownKindError,
     UsageError,
 )
+
+# The artifact kinds `check` accepts, as an annotation the SDK renders into the
+# published schema. The set is closed, so saying so is what keeps a client from
+# having to discover it by sending a wrong value and reading the error. Built
+# from the parser registry, so a new parser cannot skip the schema.
+ArtifactKind = Annotated[str, Field(json_schema_extra={"enum": list(artifact_kinds())})]
 
 
 def error_kind(exc: Exception) -> str:

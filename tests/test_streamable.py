@@ -9,9 +9,26 @@ from http.client import HTTPConnection
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+from cadastre.adapters.http import openapi_schema
 from cadastre.adapters.security import MCP_SCOPE, WRITE_SCOPE, credential
+from cadastre.api.registry import (
+    MANIFEST_MCP_OPERATIONS,
+    MCP_OPERATIONS,
+    MCP_WRITE_OPERATIONS,
+)
+from cadastre.core.artifacts import artifact_kinds
+from cadastre.core.errors import UsageError
 from cadastre.core.storage import CatalogStore
-from cadastre.mcp.streamable import MCPHTTPServer
+from cadastre.mcp.streamable import MCPHTTPServer, _Handler
+
+
+def _sample(published: dict[str, Any]) -> Any:
+    """A value of the type the published schema asks for."""
+    return {"string": "x", "integer": 1, "boolean": True, "object": {}}[
+        published["type"]
+    ]
 
 
 def _post(
@@ -676,3 +693,95 @@ def test_write_tool_rejects_a_caller_supplied_principal_argument(
     result = payload["result"]
     assert result["isError"] is True
     assert "principal" in result["structuredContent"]["error"]["message"]
+
+
+def test_streamable_accepts_an_explicit_null_for_an_optional_argument(
+    catalog_copy: Path,
+) -> None:
+    """A client that materialises the schema's `default: null` rather than
+    omitting the key sends exactly this, and was rejected for it (#3)."""
+    server = MCPHTTPServer(
+        ("127.0.0.1", 0),
+        catalog_copy,
+        tokens={"mcp": credential("agent", scopes={MCP_SCOPE})},
+    )
+    _, _, session = _post(
+        server,
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+    )
+    assert session
+    server = MCPHTTPServer(
+        ("127.0.0.1", 0),
+        catalog_copy,
+        tokens={"mcp": credential("agent", scopes={MCP_SCOPE})},
+    )
+    server.sessions.add(session)
+    status, payload, _ = _post(
+        server,
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "check",
+                "arguments": {
+                    "artifact": "services: {}\n",
+                    "kind": None,
+                    "path": "proposal.yaml",
+                },
+            },
+        },
+        session=session,
+    )
+    assert status == 200
+    # The null is the core's business now: it means "infer the kind", and
+    # inference declining is a domain answer. What must not come back is the
+    # transport refusing the value its own schema publishes as the default.
+    message = payload["result"]["content"][0]["text"]
+    assert "must be a string" not in message
+    assert "kind" in message
+
+
+def test_transport_accepts_every_null_its_schema_advertises() -> None:
+    """The property, not one instance of it: for every operation, an optional
+    argument the schema publishes as nullable is one the validator accepts."""
+    for operation in (
+        *MCP_OPERATIONS,
+        *MANIFEST_MCP_OPERATIONS,
+        *MCP_WRITE_OPERATIONS,
+    ):
+        schema = operation.input_schema()
+        required = set(schema["required"])
+        for name, published in schema["properties"].items():
+            if name in required:
+                continue
+            assert {"type": "null"} in published["anyOf"], (
+                f"{operation.name}.{name} is optional but not published nullable"
+            )
+            arguments: dict[str, Any] = {
+                key: _sample(schema["properties"][key]) for key in required
+            }
+            arguments[name] = None
+            _Handler._validate_tool_arguments(operation.name, arguments)
+
+
+def test_a_required_argument_sent_as_null_is_named_as_missing() -> None:
+    """Nullability is a property of optional arguments only. A required one
+    sent as null is absent, and the error should say which."""
+    with pytest.raises(UsageError, match="artifact"):
+        _Handler._validate_tool_arguments("check", {"artifact": None})
+
+
+def test_check_publishes_the_artifact_kinds_it_accepts() -> None:
+    """The set is closed and discovering it by sending a wrong value and
+    reading the error is not an interface (#4)."""
+    kinds = list(artifact_kinds())
+    assert kinds
+    check = next(item for item in MCP_OPERATIONS if item.name == "check")
+    published = check.input_schema()["properties"]["kind"]
+    assert published["anyOf"][0]["enum"] == kinds
+
+    document = openapi_schema()
+    body = document["paths"]["/check"]["post"]["requestBody"]
+    properties = body["content"]["application/json"]["schema"]["properties"]
+    assert properties["kind"]["enum"] == kinds
