@@ -8,6 +8,6 @@
 # own, so this file stays a list of live exceptions rather than history.
 #
 # setuptools ships in python:3.14-slim-bookworm.       CVE-2025-47273
-setuptools>=78.1.1
+setuptools>=84.0.0
 # msgpack arrives transitively through `mcp`.          GHSA-6v7p-g79w-8964
 msgpack>=1.2.1
