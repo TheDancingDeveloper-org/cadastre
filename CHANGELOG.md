@@ -72,6 +72,16 @@ image as the schema-compatibility predicate.
 
 ### Changed
 
+- `orchestrator-gitops` dates its evidence by the checkout it read, not by the
+  run that read it. `as_of` is now the resolved commit's committer date
+  (falling back to when HEAD last moved locally), and `extra.checkout` records
+  the commit, branch and which of the two the age came from. Nothing fetches
+  the clone, so the previous run-time stamp reported an arbitrarily old tree as
+  fresh, and a scheduled collection reset the TTL clock while the data stood
+  still. The existing staleness rule now does the right thing unchanged: a
+  checkout older than the source's TTL is stale. A directory that is not a
+  readable checkout keeps the run time and says so in a warning.
+
 - `src/cadastre/__init__.py` is the single source of truth for the version.
   The Streamable HTTP `serverInfo`, the outbound MCP `clientInfo`, the OpenAPI
   document, both image labels, the release metadata document, and the GUI
