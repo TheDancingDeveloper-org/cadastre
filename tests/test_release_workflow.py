@@ -310,6 +310,14 @@ def test_release_scripts_require_the_tested_artifacts() -> None:
     dockerfile = (root / "Dockerfile").read_text()
     assert "org.opencontainers.image.title" in dockerfile
     assert "org.opencontainers.image.licenses" in dockerfile
+    # `image.source` is what links the published package back to this
+    # repository. Without it GHCR keeps the package unattached, which costs
+    # the repository's Packages listing, Renovate's source lookup, and the
+    # provenance a signed image is published for in the first place. Both
+    # images carry it, because both are published.
+    source = 'org.opencontainers.image.source="https://github.com/TheDancingDeveloper-org/cadastre"'
+    assert source in dockerfile
+    assert source in (root / "Dockerfile.gui").read_text()
     assert '"PyYAML==6.0.3"' in (root / "pyproject.toml").read_text()
     ci_install = (root / "scripts" / "ci-install.sh").read_text()
     assert "uv export --frozen" in ci_install

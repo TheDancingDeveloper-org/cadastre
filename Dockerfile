@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 CADASTRE_DATA_DIR=/var/lib/cada
 LABEL org.opencontainers.image.title="Cadastre" \
       org.opencontainers.image.description="A map of an estate, and the policy for choosing within it." \
       org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.source="https://github.com/TheDancingDeveloper-org/cadastre" \
       org.opencontainers.image.version="$CADASTRE_VERSION" \
       org.opencontainers.image.revision="$CADASTRE_SOURCE_REVISION" \
       io.cadastre.schema-version="$CADASTRE_SCHEMA_VERSION"

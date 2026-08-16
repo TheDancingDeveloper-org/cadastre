@@ -10,6 +10,7 @@ ARG CADASTRE_SOURCE_REVISION=unknown
 ARG CADASTRE_SCHEMA_VERSION=1
 ARG CADASTRE_VERSION=unknown
 LABEL org.opencontainers.image.title="Cadastre GUI" \
+      org.opencontainers.image.source="https://github.com/TheDancingDeveloper-org/cadastre" \
       org.opencontainers.image.version="$CADASTRE_VERSION" \
       org.opencontainers.image.revision="$CADASTRE_SOURCE_REVISION" \
       io.cadastre.schema-version="$CADASTRE_SCHEMA_VERSION"
