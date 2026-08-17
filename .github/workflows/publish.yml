@@ -26,8 +26,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Self-hosted, unlike ci.yaml: this workflow triggers only on push to `main`
+  # and workflow_dispatch, so it never builds unreviewed fork code and the
+  # fork-PR argument recorded at the top of ci.yaml does not apply here.
   verify:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, node-b, linux, x64]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
