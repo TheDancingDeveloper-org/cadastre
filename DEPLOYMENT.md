@@ -89,8 +89,9 @@ fail *open*, as an empty mount rather than an error.
 A bind-mount whose host path does not exist is created by the daemon as an
 empty directory rather than refused. For `CADASTRE_COLLECT_CONFIG_DIR` that is
 the consequential one: the collector starts, finds no sources configured,
-collects nothing, and exits `0` like any other run. Section 8.5 is the check
-that distinguishes it from a successful collection.
+collects nothing, and exits `0` — there are no sources to fail, so even
+`collect --exit-code` (§8.2) is clean. Section 8.5 is the check that
+distinguishes it from a successful collection.
 
 Compose substitution variables are not container environment. Nothing in this
 table delivers a credential to a plugin; that is `CADASTRE_COLLECT_ENV_FILE`'s
@@ -457,13 +458,27 @@ a login shell and fails from `crontab` is almost always one of those three.
 The offset minute spreads collection off the top of the hour, where every other
 scheduled job in the estate already is.
 
-Do not read a silent cron as a successful collection. `cadastre collect` exits
-`0` when a source fails: a plugin that cannot reach its upstream renders as a
-`STALE` row in the run's output and a stale source in every answer that depends
-on it, which is the designed behaviour (`DESIGN.md` §2.5) but not something
-cron's mail-on-failure will ever tell you about. A non-zero exit means compose,
-the entrypoint, or the catalog itself failed — a coarser signal than the one
-you actually want. Section 8.5 is the check that covers the difference.
+The collector's `--exit-code` is what makes cron's mail-on-failure worth
+having. `compose.production.yaml` passes it, because this job exists to be
+scheduled; the flag is off by default at the CLI, where an interactive
+`cadastre collect` failing the shell over a STALE source would be noise.
+
+Without it the command exits `0` when a source fails: the plugin that cannot
+reach its upstream renders as a `STALE` row and a stale source in every answer
+that depends on it — designed behaviour (`DESIGN.md` §2.5), and invisible to a
+scheduler that only reads exit status. With it, any failed source exits `1`,
+including a partial failure of one source out of eight, which is the case you
+would otherwise never hear about.
+
+Keeping the evidence and reporting the failure are not in tension: the STALE
+source still keeps its previous evidence, and the run still writes everything
+that did collect. The flag changes what the *caller* is told, not what is
+stored.
+
+A non-zero exit therefore now means either a failed source or a failure of
+compose, the entrypoint, or the catalog itself. Section 8.5 tells them apart,
+and remains worth running: `--exit-code` cannot report a run that never
+started.
 
 ### 8.3 systemd timer
 
@@ -537,7 +552,7 @@ spec:
             - name: collector
               image: ghcr.io/<owner>/cadastre@sha256:<pinned digest>
               command: [python, /app/scripts/infisical-entrypoint.py]
-              args: [cadastre, collect]
+              args: [cadastre, collect, --exit-code]
               env:
                 - name: CADASTRE_DATA_DIR
                   value: /var/lib/cadastre
@@ -585,8 +600,9 @@ Three checks, in order, because each rules out something the next one cannot.
 
 1. **Run it once by hand.** `docker compose --profile collector run --rm
    cadastre-collector` prints one row per configured source. Every row should
-   read `ok`; a `STALE` row names the source and the error, and the run still
-   exits `0`.
+   read `ok`; a `STALE` row names the source and the error, and the run exits
+   `1` because the compose service passes `--exit-code` (§8.2). That is the
+   signal the scheduler acts on; the rows are the signal you act on.
 2. **`GET /sources`** (or `cadastre sources`) runs the `plugin.info` handshake
    live against every configured source. It separates "not configured" from
    "configured and failing" — but it says nothing about when anything was last

@@ -64,6 +64,21 @@ def test_the_unit_runs_the_installed_script() -> None:
     assert "ReadWritePaths=/var/lib/cadastre" in unit
 
 
+def test_the_job_finishes_the_run_and_still_reports_a_failed_collection() -> None:
+    """Two obligations that look opposed and are not.
+
+    An unreachable plugin keeps its evidence and must not abort the drift
+    report that follows it, so the collection is not allowed to fail the shell
+    where it runs. But the timer learns of a failed collection only from this
+    script's exit status, so the failure must survive to the end of it.
+    """
+    script = (COLLECTOR / "collect.sh").read_text()
+
+    assert "collect --exit-code || collect_status=$?" in script
+    # Last statement, so drift still runs and still cannot decide the status.
+    assert script.strip().splitlines()[-1] == 'exit "$collect_status"'
+
+
 # --------------------------------------------------------------------------
 # Infisical universal-auth entrypoint (§3 remainder, F5)
 # --------------------------------------------------------------------------

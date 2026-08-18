@@ -94,6 +94,58 @@ def test_a_failing_collector_keeps_its_previous_evidence_and_goes_stale(
     assert stale[0].error
 
 
+def test_a_failed_source_exits_non_zero_only_when_the_caller_asks(
+    catalog_copy: Path,
+) -> None:
+    """A scheduler detects a failed collection the only way it can: exit status.
+
+    cron's mail-on-failure, a systemd `OnFailure=` and a Kubernetes
+    `restartPolicy: OnFailure` all read the exit code and nothing else, so a
+    collector that always exits 0 is invisible to every one of them. Opt-in,
+    like `drift --exit-code`, because a STALE source is a designed outcome and
+    the default must not start failing runs that today succeed.
+    """
+    _configure(catalog_copy, mode="crash")
+
+    assert collect(_session(catalog_copy)).exit_code == 0
+    document = collect(_session(catalog_copy), exit_code=True)
+    assert document.exit_code == 1
+    assert document.data["failed"] == ["fixture"]
+
+
+def test_a_clean_run_exits_zero_with_exit_code_asked_for(catalog_copy: Path) -> None:
+    _configure(catalog_copy)
+    document = collect(_session(catalog_copy), exit_code=True)
+    assert document.exit_code == 0
+    assert document.data["failed"] == []
+
+
+def test_a_partial_failure_is_a_failed_collection(catalog_copy: Path) -> None:
+    """One source of several going quiet is the case that is otherwise invisible."""
+    source = """\
+- id: {id}
+  command: [{python}, {script}]
+  methods: [inventory.list, endpoint.list, secret.list]
+  config:
+    mode: {mode}
+"""
+    common = {
+        "python": json.dumps(sys.executable),
+        "script": json.dumps(str(FIXTURES / "plugin_fixture.py")),
+    }
+    (catalog_copy / "declared" / "plugins.yaml").write_text(
+        "freshness:\n  default: 86400\nsources:\n"
+        + source.format(id="fixture", mode="ok", **common)
+        + source.format(id="second", mode="crash", **common),
+        encoding="utf-8",
+    )
+    document = collect(_session(catalog_copy), exit_code=True)
+
+    assert [source["ok"] for source in document.data["sources"]] == [True, False]
+    assert document.data["failed"] == ["second"]
+    assert document.exit_code == 1
+
+
 def test_a_source_goes_stale_once_it_passes_its_ttl(catalog_copy: Path) -> None:
     _configure(catalog_copy)
     collect(_session(catalog_copy))

@@ -253,7 +253,18 @@ def collect(
     *,
     sources: list[str] | None = None,
     dry_run: bool = False,
+    exit_code: bool = False,
 ) -> Document:
+    """Run the configured collectors.
+
+    `exit_code` follows `drift --exit-code`: off by default, because a STALE
+    source is a designed outcome (DESIGN §2.5) and not every caller wants the
+    run to fail over it. A *scheduler* does — cron's mail-on-failure, a
+    systemd `OnFailure=`, and a Kubernetes `restartPolicy: OnFailure` all read
+    the exit status and nothing else — so the recipes in DEPLOYMENT.md §8 pass
+    it. A partial failure counts: one source of eight going quiet is exactly
+    the case that is otherwise invisible.
+    """
     wanted = set(sources) if sources else None
     # A catalog may have been initialized from checked-in snapshots before its
     # first collection.  Seed the cache once, without treating that as a new
@@ -262,6 +273,7 @@ def collect(
     if not dry_run:
         sync_snapshots(session.root)
     rows = []
+    failed: list[str] = []
     warnings: list[str] = []
     written: list[str] = []
     data: list[dict[str, Any]] = []
@@ -278,6 +290,8 @@ def collect(
             f"{len(v)} {k}" for k, v in sorted(observed.entities.items()) if v
         )
         state = "ok" if observed.ok else "STALE"
+        if not observed.ok:
+            failed.append(config.id)
         rows.append((config.id, state, observed.error or "", counts))
         data.append(
             {
@@ -319,6 +333,19 @@ def collect(
             ),
         )
     ]
+    if failed:
+        sections.append(
+            Section(
+                "Failed sources",
+                (Bullets(tuple(failed)),),
+                note=(
+                    "Run with --exit-code to have this exit 1, so a scheduler can "
+                    "tell a failed collection from a clean one."
+                    if not exit_code
+                    else "--exit-code was given, so this run exits 1."
+                ),
+            )
+        )
     if warnings:
         sections.append(Section("Plugin warnings", (Bullets(tuple(warnings)),)))
     if written:
@@ -361,5 +388,11 @@ def collect(
         title="cadastre collect",
         sections=tuple(sections),
         provenance=provenance.frozen(),
-        data={"sources": data, "written": sorted(written), "warnings": warnings},
+        data={
+            "sources": data,
+            "written": sorted(written),
+            "warnings": warnings,
+            "failed": failed,
+        },
+        exit_code=1 if (exit_code and failed) else 0,
     )

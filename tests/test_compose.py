@@ -152,3 +152,24 @@ def test_sample_credentials_cover_every_sample_plugin() -> None:
     token_envs = set(re.findall(r"token_env:\s*([A-Z0-9_]+)", plugins))
     assert token_envs, "no token_env keys found in the sample plugin config"
     assert sorted(v for v in token_envs if v not in sample) == []
+
+
+def test_the_scheduled_collector_reports_a_failed_collection() -> None:
+    """A scheduler detects a failed collection through the exit status alone.
+
+    Every recipe in DEPLOYMENT.md §8 — cron, a systemd `OnFailure=`, a
+    Kubernetes `restartPolicy: OnFailure` — is inert against a job that always
+    exits 0, which is the state that hid the incident behind #6/#7.
+    """
+    root = Path(__file__).parents[1]
+    services = yaml.safe_load(
+        (root / "compose.production.yaml").read_text(encoding="utf-8")
+    )["services"]
+
+    assert services["cadastre-collector"]["command"] == [
+        "cadastre",
+        "collect",
+        "--exit-code",
+    ]
+    deployment = (root / "DEPLOYMENT.md").read_text(encoding="utf-8")
+    assert "args: [cadastre, collect, --exit-code]" in deployment
