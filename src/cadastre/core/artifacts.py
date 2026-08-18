@@ -44,6 +44,32 @@ _FILESYSTEM_PATH_PREFIXES = (
     "/usr/",
     "/var/",
 )
+#: A bare `/…` value is ambiguous by shape: `DB_PASSWORD: /notes-api-db-password`
+#: is a malformed reference, `RUNNER_WORKDIR: /runner-work/_work` is a mount
+#: point, and nothing about the two values tells them apart. The name does, so
+#: these decide it. Credential words are matched as whole `_`-separated words:
+#: `API_KEY` names a credential, `KEYCLOAK_DIR` does not.
+_CREDENTIAL_WORDS = frozenset(
+    {
+        "APIKEY",
+        "AUTH",
+        "CERT",
+        "CREDENTIAL",
+        "CREDENTIALS",
+        "KEY",
+        "PASS",
+        "PASSPHRASE",
+        "PASSWD",
+        "PASSWORD",
+        "PAT",
+        "SECRET",
+        "TOKEN",
+    }
+)
+#: A location, whatever else the name says. `*_FILE` is the convention for
+#: "the credential is in this file", so the value is a path, not a reference.
+_LOCATION_SUFFIXES = ("_DIR", "_PATH", "_FILE", "_ROOT", "_WORKDIR", "_HOME")
+_LOCATION_NAMES = frozenset({"PATH", "PWD", "HOME"})
 
 
 @dataclass(frozen=True)
@@ -191,17 +217,38 @@ def _environment_values(raw: Any) -> list[tuple[str, str]]:
     return []
 
 
+def _names_a_credential(key: str) -> bool:
+    """Whether a variable's *name* says its value is a credential.
+
+    Asked of the name rather than of the value because an absolute path is the
+    one shape both a malformed reference and an ordinary mount point take. The
+    allowlist of filesystem roots this used to rely on cannot separate them:
+    it reads `RUNNER_CONFIG_DIR: /runner-config` as a secret reference purely
+    because the estate does not mount under `/var/`, and reports it as
+    malformed and unresolvable — two errors on a correct file, with no way to
+    annotate them away.
+    """
+    name = key.upper()
+    if name in _LOCATION_NAMES or name.endswith(_LOCATION_SUFFIXES):
+        return False
+    return any(word in _CREDENTIAL_WORDS for word in name.split("_"))
+
+
 def _looks_like_secret_reference(key: str, value: str) -> bool:
+    # An explicit prefix states its intent, so it is a reference whatever the
+    # variable is called — including the `PATH`/`PWD`/`HOME` names that are
+    # otherwise always a location.
+    if value.startswith(("secret:", "secret_ref:")):
+        return True
     if not _SECRET_SHAPED.match(value):
         return False
     # Absolute container paths are ordinary configuration, not secret refs.
-    # Keep slash-shaped values outside these conventional filesystem roots
-    # visible to the secret-reference rules, including malformed references.
+    # A slash-shaped value stays visible to the secret-reference rules — a
+    # malformed reference is worth catching — but only where the variable's
+    # name says a credential is what it holds.
     if value.startswith(_FILESYSTEM_PATH_PREFIXES):
         return False
-    return key.upper() not in {"PATH", "PWD", "HOME"} or value.startswith(
-        ("secret:", "secret_ref:")
-    )
+    return _names_a_credential(key)
 
 
 def _secret_refs(service: dict[str, Any], cadastre: dict[str, Any]) -> tuple[str, ...]:

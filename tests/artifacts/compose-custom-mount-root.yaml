@@ -1,0 +1,18 @@
+# A workspace mounted at a root of the estate's own choosing, which Compose
+# permits and no conventional-roots allowlist can anticipate. Every value here
+# is a location, and none of them is a secret reference.
+x-cadastre:
+  host: app-01
+  expose: internal
+services:
+  runner:
+    image: example.invalid/runner:1.0
+    environment:
+      RUNNER_CONFIG_DIR: /runner-config
+      RUNNER_WORKDIR: /runner-work/_work
+      # The `*_FILE` convention: the credential is in the file, so the value
+      # is the path to it, not a reference to the secret itself.
+      REGISTRY_PASSWORD_FILE: /runner-config/registry-password
+    volumes:
+      - /var/lib/runner/config:/runner-config
+      - /var/lib/runner/work:/runner-work
