@@ -217,7 +217,14 @@ def _session_with_projects(tmp_path: Path, *, reverse: bool = False) -> Session:
             registry=registry,
         ),
     )
-    return Session.open_fixture(tmp_path, now=datetime(2026, 8, 10, tzinfo=UTC))
+    # A file-backed `declared as_of` is the newest mtime under `declared/`, so
+    # two fixtures built in sequence disagree across a one-second boundary.
+    # Byte-stability is asserted here, and a clock is not part of what it proves.
+    return Session.open_fixture(
+        tmp_path,
+        now=datetime(2026, 8, 10, tzinfo=UTC),
+        as_of="2026-08-10T00:00:00Z",
+    )
 
 
 def test_projects_includes_empty_repos_multiple_checkouts_and_mismatches(
