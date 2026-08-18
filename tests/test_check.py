@@ -13,7 +13,11 @@ import pytest
 
 from cadastre.cli.check import check
 from cadastre.cli.session import Session
-from cadastre.core.artifacts import infer_kind, parse
+from cadastre.core.artifacts import (
+    _looks_like_secret_reference,
+    infer_kind,
+    parse,
+)
 from cadastre.core.errors import UsageError
 from cadastre.core.rules import RULES
 from cadastre.render import text
@@ -243,6 +247,57 @@ def test_port_mappings_are_read_as_the_published_port() -> None:
 def test_absolute_runtime_paths_are_not_secret_references() -> None:
     artifact = parse(Path(__file__).parents[1] / "compose.production.yaml")
     assert artifact.secret_refs == ()
+
+
+def test_a_mount_root_the_allowlist_never_heard_of_is_still_a_path() -> None:
+    """The estate picks its own mount roots; `check` does not get a vote.
+
+    This is the case `compose.production.yaml` cannot cover, because every path
+    in it happens to sit under one of the conventional roots. A workspace at
+    `/runner-work` used to be read as a secret reference for no reason beyond
+    that, and reported as both malformed and unresolvable — two errors each,
+    on a correct file, with nothing an author could write to annotate them
+    away.
+    """
+    artifact = parse(ARTIFACTS / "compose-custom-mount-root.yaml")
+    assert artifact.secret_refs == ()
+
+
+def test_a_credential_written_as_a_bare_path_is_still_caught() -> None:
+    """The reason the bare-path case is examined at all. Named, so narrowing
+    the heuristic to credential-shaped variable names cannot quietly drop it."""
+    artifact = parse(ARTIFACTS / "compose-bad-secret-format.yaml")
+    assert artifact.secret_refs == ("/notes-api-db-password",)
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "is_reference"),
+    [
+        # The name decides, because the value's shape cannot.
+        ("DB_PASSWORD", "/prod/db-password", True),
+        ("API_TOKEN", "/cicd/prod/TOKEN", True),
+        ("SSH_PRIVATE_KEY", "/keys/id", True),
+        ("GITHUB_RUNNER_PAT", "/forge/prod/PAT", True),
+        ("RUNNER_CONFIG_DIR", "/runner-config", False),
+        ("RUNNER_WORKDIR", "/runner-work/_work", False),
+        ("DATA_ROOT", "/data", False),
+        # `KEY` is a credential word; `KEYCLOAK` is not the same word.
+        ("API_KEY", "/apps/prod/KEY", True),
+        ("KEYCLOAK_DIR", "/keycloak", False),
+        # `*_FILE` names where a credential lives, so the value is a path.
+        ("DB_PASSWORD_FILE", "/etc/secrets/db", False),
+        ("REGISTRY_PASSWORD_FILE", "/runner-config/registry-password", False),
+        # An explicit prefix states its intent, whatever the variable is called.
+        ("PATH", "secret:cicd/prod/TOKEN", True),
+        ("ANYTHING", "secret_ref:cicd/prod/TOKEN", True),
+        ("PATH", "/usr/local/bin", False),
+        ("IMAGE", "ghcr.io/example/app:1.0", False),
+    ],
+)
+def test_only_a_credential_shaped_name_makes_a_bare_path_a_reference(
+    key: str, value: str, is_reference: bool
+) -> None:
+    assert _looks_like_secret_reference(key, value) is is_reference
 
 
 def test_a_missing_artifact_is_a_usage_error(session: Session) -> None:
