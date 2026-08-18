@@ -110,7 +110,7 @@ def test_every_compose_variable_is_documented_for_operators() -> None:
 
 
 def test_env_example_invents_no_variable_the_stack_ignores() -> None:
-    """The reverse direction: a documented variable that substitutes nowhere is a lie."""
+    """The reverse: a documented variable that substitutes nowhere is a lie."""
     root = Path(__file__).parents[1]
     declared = set(
         re.findall(
@@ -143,7 +143,7 @@ def test_collector_can_receive_per_plugin_credentials() -> None:
 
 
 def test_sample_credentials_cover_every_sample_plugin() -> None:
-    """`collect.env.sample` is the operator's checklist; a gap in it is a silent source."""
+    """`collect.env.sample` is the checklist; a gap in it is a silent source."""
     root = Path(__file__).parents[1]
     plugins = (root / "examples" / "plugins.sample.yaml").read_text(encoding="utf-8")
     sample = (root / "examples" / "collector" / "collect.env.sample").read_text(
