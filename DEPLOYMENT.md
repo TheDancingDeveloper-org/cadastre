@@ -53,6 +53,49 @@ same logical catalog and observed data model. They may be one process or two
 processes, but the deployment must document which choice is made and must not
 create independent databases accidentally.
 
+### 1.1 Configuration reference
+
+`compose.production.yaml` is substituted from `.env` in the working directory.
+Copy [`.env.example`](.env.example) and edit it; the table below is the same
+list, with the profiles each variable applies to.
+
+Every variable has a default, so the stack starts without an `.env`. That is a
+convenience for `local`, not a supported production posture — the two image
+digests are placeholders that will not pull, and three of the directory mounts
+fail *open*, as an empty mount rather than an error.
+
+| Variable | Default | Applies to | Notes |
+|---|---|---|---|
+| `CADASTRE_IMAGE` | placeholder digest | all | **Required.** Pin by signed digest. |
+| `CADASTRE_GUI_IMAGE` | placeholder digest | `direct-https`, `direct-mcp` | **Required** for those profiles. |
+| `CADASTRE_BIND_IP` | `127.0.0.1` | all published ports | Loopback unless a proxy terminates traffic. |
+| `CADASTRE_LOCAL_PORT` | `8000` | `local` | Plain HTTP, development only. |
+| `CADASTRE_API_PORT` | `8443` | `direct-https` | |
+| `CADASTRE_MCP_PORT` | `8444` | `direct-mcp` | Distinct from the API port. |
+| `CADASTRE_GUI_PORT` | `8080` | `direct-https`, `direct-mcp` | |
+| `CADASTRE_API_ORIGIN` | `https://localhost:8443` | GUI | As the *browser* resolves it; must match the certificate. |
+| `CADASTRE_TLS_DIR` | `/etc/cadastre/tls` | `direct-https`, `direct-mcp` | Supplies `tls.crt`, `tls.key`. |
+| `CADASTRE_AUTH_DIR` | `/etc/cadastre/auth` | `direct-https`, `direct-mcp` | Supplies `tokens`. |
+| `CADASTRE_PROXY_DIR` | `/etc/cadastre/proxy` | `proxy` | Supplies `secret`. |
+| `CADASTRE_PROXY_NETWORK` | `10.0.0.0/8` | `proxy` | CIDR the proxy may forward from. |
+| `CADASTRE_PROXY_SCOPE` | `proxy=catalog.read` | `proxy` | Principal-to-scope mapping. |
+| `CADASTRE_COLLECT_CONFIG_DIR` | `/etc/cadastre/collect` | `collector` | Plugin configuration. See the warning below. |
+| `CADASTRE_COLLECT_ENV_FILE` | `/etc/cadastre/collect.env` | `collector` | Per-plugin credentials; optional. See §8. |
+| `CADASTRE_INFISICAL_DIR` | `/etc/cadastre/infisical` | `collector` | Universal-auth `client_id`/`client_secret`. |
+| `CADASTRE_INFISICAL_TOKEN_ENV` | `CADASTRE_P_SECRETS_TOKEN` | `collector` | Must match the source's `token_env`. |
+| `CADASTRE_VOLUME` | `cadastre-data` | all | Renaming on a running deployment points the stack at an empty database (§7). |
+| `CADASTRE_NETWORK` | `cadastre` | all | |
+
+A bind-mount whose host path does not exist is created by the daemon as an
+empty directory rather than refused. For `CADASTRE_COLLECT_CONFIG_DIR` that is
+the consequential one: the collector starts, finds no sources configured,
+collects nothing, and exits `0` like any other run. Section 8.5 is the check
+that distinguishes it from a successful collection.
+
+Compose substitution variables are not container environment. Nothing in this
+table delivers a credential to a plugin; that is `CADASTRE_COLLECT_ENV_FILE`'s
+job alone.
+
 ## 2. Canonical secure remote flow
 
 ```mermaid
@@ -337,7 +380,33 @@ process that is supposed to exit. `--profile collector` because the profile is
 what keeps it out of the ordinary stack. `--rm` because every run otherwise
 leaves a stopped container behind, and a year of hourly collection is 8,760 of
 them. No arguments: the service already carries its entrypoint, command, data
-volume, and credential mounts.
+volume, and configuration mounts.
+
+Credentials are the one thing it does not carry by default. A
+`secrets-infisical` source needs none: the entrypoint performs a universal-auth
+login from `CADASTRE_INFISICAL_DIR` and mints a short-lived token into the
+process environment. Every other plugin — forge, CI, DNS, VPN, hypervisor —
+reads a `CADASTRE_P_*` variable named by its `token_env`, and those arrive
+through the collector's `env_file`:
+
+```yaml
+env_file:
+  - path: ${CADASTRE_COLLECT_ENV_FILE:-/etc/cadastre/collect.env}
+    required: false
+```
+
+Populate it from [`examples/collector/collect.env.sample`](examples/collector/collect.env.sample),
+which names one variable per plugin and states the minimum scope each needs.
+`required: false` keeps an Infisical-only estate working without the file; the
+cost is that a *missing* file is indistinguishable from a correct one until
+§8.5 tells you which sources actually reported. The long `env_file` form that
+carries `required` needs Compose v2.24 or newer; on anything older the key is
+rejected outright rather than ignored, which at least fails loudly.
+
+Do not expect `--env-file` to do this. It populates Compose *substitution* —
+the `${CADASTRE_*}` values in this document — and never reaches inside a
+container. A `CADASTRE_P_DNS_TOKEN` set there is read by Compose, matched
+against nothing, and silently dropped.
 
 The three recipes below wrap that one command. They are shapes, not a
 recommendation between orchestrators — pick whichever timer the estate already
@@ -399,9 +468,13 @@ you actually want. Section 8.5 is the check that covers the difference.
 ### 8.3 systemd timer
 
 The same timer shape as [`examples/collector/`](examples/collector/README.md),
-with the host install removed: no `useradd`, no `uv tool install`, no
-credentials on the host outside the mounts the compose file already declares.
-The unit's only dependency is the container runtime.
+with the host install removed: no `useradd`, no `uv tool install`. The unit's
+only dependency is the container runtime.
+
+The host does still hold the collector's credential file unless every
+configured source is `secrets-infisical` — `CADASTRE_COLLECT_ENV_FILE`, mode
+`0400`, exactly as the host recipe uses it. What the container path removes is
+the Python install and the service account, not the credentials themselves.
 
 ```ini
 # /etc/systemd/system/cadastre-collect.service

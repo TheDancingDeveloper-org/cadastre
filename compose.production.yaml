@@ -128,6 +128,15 @@ services:
     entrypoint: [python, /app/scripts/infisical-entrypoint.py]
     command: [cadastre, collect]
     restart: "no"
+    # One read-only credential per plugin, matching the `token_env` names in
+    # declared/plugins.yaml — the same file the host collector loads as an
+    # EnvironmentFile (examples/collector/collect.env.sample). Compose's
+    # `--env-file` substitutes into *this* document; only `env_file` puts a
+    # value inside the container. Optional, because an Infisical-only estate
+    # mints its tokens in the entrypoint instead.
+    env_file:
+      - path: ${CADASTRE_COLLECT_ENV_FILE:-/etc/cadastre/collect.env}
+        required: false
     environment:
       CADASTRE_DATA_DIR: /var/lib/cadastre
       INFISICAL_CLIENT_ID_FILE: /run/cadastre/infisical/client_id
