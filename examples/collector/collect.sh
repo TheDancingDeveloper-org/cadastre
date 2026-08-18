@@ -18,14 +18,20 @@ set -eu
 DATA_DIR=${CADASTRE_DATA_DIR:?set CADASTRE_DATA_DIR to the initialized data directory}
 
 # Collectors that cannot reach their plugin keep their previous evidence and
-# mark the source stale (DESIGN §2.2). That is a normal outcome, not a failure,
-# so a single unreachable plugin must not abort the run.
-cadastre --data-dir "$DATA_DIR" collect
+# mark the source stale (DESIGN §2.2). That evidence is kept either way, so a
+# single unreachable plugin must not abort the rest of this run — but it must
+# still reach the timer, which detects a failed collection only through this
+# script's exit status. Hence: record it, finish the run, exit with it.
+collect_status=0
+cadastre --data-dir "$DATA_DIR" collect --exit-code || collect_status=$?
 
 # drift itself writes nothing (it reports and stops — DESIGN §1.3). The
 # generated drift.json in the layout is generated here, by redirection.
 cadastre --data-dir "$DATA_DIR" drift --json
 
-# Report drift to the journal. Exit status stays 0: drift is a human decision,
-# and a timer that goes red on every divergence is a timer nobody reads.
+# Report drift to the journal. Drift never decides this script's exit status:
+# it is a human decision, and a timer that goes red on every divergence is a
+# timer nobody reads. A failed *collection* is not a human decision.
 cadastre --data-dir "$DATA_DIR" drift || true
+
+exit "$collect_status"

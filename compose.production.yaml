@@ -123,10 +123,15 @@ services:
     # mint lives only in this process's environment — never written to
     # `cadastre-data`, never logged. Estates not using Infisical for
     # `secrets-infisical` sources can drop this entrypoint override and go
-    # back to `command: [collect]` with a static `token_env` credential
-    # instead.
+    # back to `command: [collect, --exit-code]` with a static `token_env`
+    # credential instead.
     entrypoint: [python, /app/scripts/infisical-entrypoint.py]
-    command: [cadastre, collect]
+    # `--exit-code` because this job exists to be scheduled, and cron, a
+    # systemd `OnFailure=` and a Kubernetes `restartPolicy: OnFailure` all
+    # detect a failed collection the same way: a non-zero exit. Without it a
+    # source that cannot reach its upstream is reported only as a STALE row
+    # nobody reads. The evidence it collected is still kept and still written.
+    command: [cadastre, collect, --exit-code]
     restart: "no"
     # One read-only credential per plugin, matching the `token_env` names in
     # declared/plugins.yaml — the same file the host collector loads as an

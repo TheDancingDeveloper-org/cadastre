@@ -4,7 +4,8 @@ Exit codes are part of the contract:
 
 * ``0`` the command answered.
 * ``1`` the command answered and found something the caller asked to be told
-  about with a non-zero exit (`check` failures, `drift --exit-code`).
+  about with a non-zero exit (`check` failures, `drift --exit-code`,
+  `collect --exit-code`).
 * ``2`` the invocation or the catalog was wrong. Never a traceback.
 """
 
@@ -162,6 +163,11 @@ def build_parser(*, include_manifest: bool = False) -> argparse.ArgumentParser:
     )
     collect.add_argument(
         "--dry-run", action="store_true", help="Report what would be written."
+    )
+    collect.add_argument(
+        "--exit-code",
+        action="store_true",
+        help="Exit 1 when any source fails. For a scheduler that watches this.",
     )
 
     fmt = sub_parser("fmt", "Rewrite declared/ in canonical form.")
@@ -635,7 +641,12 @@ def dispatch(args: argparse.Namespace) -> Document:
     if args.command == "drift":
         return drift_cmd.drift(session, exit_code=args.exit_code)
     if args.command == "collect":
-        return collect_cmd.collect(session, sources=args.source, dry_run=args.dry_run)
+        return collect_cmd.collect(
+            session,
+            sources=args.source,
+            dry_run=args.dry_run,
+            exit_code=args.exit_code,
+        )
     if args.command == "add":
         return write_cmd.run(
             session,
