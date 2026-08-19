@@ -9,6 +9,40 @@ The version recorded here is `application_version` in
 `src/cadastre/release-compatibility.json`, which is attested to every released
 image as the schema-compatibility predicate.
 
+## v0.2.2
+
+### Fixed
+
+- **`lookup` resolves against observed evidence, not just `declared/`.**
+  Cadastre returned `missing_entity` for infrastructure it had itself observed
+  from a fresh collector run, and the message told the caller the catalog was
+  wrong. The observation was retained the whole time, reachable only inside a
+  `drift` dump large enough to exceed an MCP tool result limit. Resolution is
+  now declared, then observed, then containment. An observed-only hit is
+  labelled as one, carrying its source and `as_of` with `declared: false`, no
+  `declared_at` and no relations — reachable, never promoted (DESIGN §1.3).
+  The `missing_entity` message is unchanged for the case it was written for,
+  and now also says that nothing observed the id either. ([#19])
+- **A container inside a stack is reachable by the name a human uses.**
+  `orchestrator-gitops` emits one entity per compose stack, which is the right
+  altitude, but the constituent names survived only inside an attribute block
+  nothing indexed — so `lookup loki` failed even though `grafanaloki` was
+  known. Any `x-*` block listing mappings with a `name` is now indexed as
+  member names. No plugin key is special-cased, no value is interpreted, and
+  the answer is the containing entity marked as a containment hit, never a new
+  entity. ([#19])
+- **An unattributable host is stated rather than left empty.** A GitOps repo
+  does not know its deployment target, so `runs_on` was empty for every
+  observed service — which compares as agreement with a declared host rather
+  than as a gap, and made "what runs on this host?" unanswerable from
+  observation. `orchestrator-gitops` now records `host_attribution: unknown`
+  in its `x-orchestrator` block and warns how many stacks it could not place,
+  and `lookup <host>` reports both what collectors attributed to that host and
+  how many observations could not be attributed at all. Guessing a host from a
+  directory name stays refused. ([#19])
+
+[#19]: https://github.com/TheDancingDeveloper-org/cadastre/issues/19
+
 ## v0.2.1
 
 ### Added
