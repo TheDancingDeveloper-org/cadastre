@@ -94,12 +94,24 @@ def transform_stack(
     if not compose_services:
         return None
     stack_host = top.get("host") or host
-    entity: dict[str, Any] = {
-        "id": stack,
-        "x-orchestrator": {"compose_services": compose_services},
-    }
+    orchestrator: dict[str, Any] = {"compose_services": compose_services}
+    entity: dict[str, Any] = {"id": stack, "x-orchestrator": orchestrator}
     if stack_host:
         entity["runs_on"] = str(stack_host)
+    else:
+        # An unattributed host is recorded as evidence, not smuggled into
+        # `runs_on`. Writing a placeholder there would make a declared
+        # `runs_on: node-b` look contradicted by a collector that never
+        # observed a host at all, and inventing one from the directory name is
+        # the plausible-and-wrong answer this file already refuses to give.
+        # Leaving nothing at all was the third bad option: silence in the model
+        # is indistinguishable from "no host", so the gap has to be *stated*
+        # somewhere a reader can reach.
+        orchestrator["host_attribution"] = "unknown"
+        orchestrator["host_attribution_reason"] = (
+            "no x-cadastre.host in the compose file and host_from is not "
+            "configured; a GitOps repo does not know its deployment target"
+        )
     expose = top.get("expose")
     if expose:
         entity["expose"] = str(expose)
@@ -140,6 +152,25 @@ def scan(root: Path, options: dict[str, Any]) -> dict[str, Any]:
         seen.add(str(service["id"]))
         unique.append(service)
     return {"entities": {"service": unique}}
+
+
+#: How many stacks this source could not place on a host. Emitted as a warning
+#: rather than left implicit, because `runs_on: ""` reads as agreement with
+#: whatever was declared and makes "what runs on this host?" quietly
+#: unanswerable from observation.
+UNATTRIBUTED = (
+    "{count} of {total} stacks carry no observed host: runs_on is unset, not "
+    "empty, and this source cannot answer host-scoped questions. Set "
+    "x-cadastre.host in the compose file, or host_from: directory where the "
+    "layout really does name hosts"
+)
+
+
+def _attribution_warning(services: list[dict[str, Any]]) -> tuple[str, ...]:
+    count = sum(1 for service in services if not service.get("runs_on"))
+    if not count:
+        return ()
+    return (UNATTRIBUTED.format(count=count, total=len(services)),)
 
 
 #: The one warning that matters here: without it, an unknown age is
@@ -202,10 +233,11 @@ def _collect(request: Request) -> Reply:
     result = scan(root, request.config)
     result["extra"] = {"checkout": state}
     as_of = _as_of(state)
+    warnings = () if as_of else (UNKNOWN_AGE,)
     return ok(
         result,
         as_of or format_timestamp(datetime.now(tz=UTC)),
-        () if as_of else (UNKNOWN_AGE,),
+        warnings + _attribution_warning(result["entities"]["service"]),
     )
 
 

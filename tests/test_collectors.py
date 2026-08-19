@@ -1478,7 +1478,7 @@ def test_an_ops_checkout_older_than_the_ttl_is_stale_although_the_run_is_new(
     )
 
     assert reply.as_of == format_timestamp(committed)
-    assert reply.warnings == ()
+    assert orchestrator_gitops.UNKNOWN_AGE not in reply.warnings
     assert reply.result["extra"]["checkout"] == {
         "path": str(tmp_path),
         "basis": "commit",
@@ -1512,7 +1512,7 @@ def test_a_packed_head_dates_the_ops_checkout_by_when_it_last_moved(
         Request(method="inventory.list", config={"path": str(tmp_path)})
     )
 
-    assert reply.warnings == ()
+    assert orchestrator_gitops.UNKNOWN_AGE not in reply.warnings
     checkout = reply.result["extra"]["checkout"]
     assert checkout["basis"] == "checkout"
     assert checkout["commit"] == REVISION
@@ -1534,7 +1534,7 @@ def test_an_ops_directory_that_is_not_a_checkout_says_its_age_is_unknown(
         Request(method="inventory.list", config={"path": str(tmp_path)})
     )
 
-    assert reply.warnings == (orchestrator_gitops.UNKNOWN_AGE,)
+    assert reply.warnings[0] == orchestrator_gitops.UNKNOWN_AGE
     assert reply.result["extra"]["checkout"]["basis"] == "collection"
     assert reply.result["entities"]["service"][0]["id"] == "notes"
 
@@ -1724,3 +1724,56 @@ def test_a_method_a_collector_does_not_implement_is_not_found(module: Any) -> No
     reply = json.loads(stdout.getvalue())
     assert reply["ok"] is False
     assert reply["error"]["kind"] == "not_found"
+
+
+def test_an_unplaceable_stack_states_the_gap_rather_than_faking_a_host(
+    tmp_path: Path,
+) -> None:
+    """GitHub #19. `runs_on: ""` compares as agreement with a declared host and
+    makes "what runs on this host?" unanswerable from observation. A GitOps
+    repo cannot know its deployment target, so the gap is recorded as evidence
+    and warned about — never guessed, and never left to silence."""
+    stack = tmp_path / "grafanaloki"
+    stack.mkdir()
+    (stack / "compose.yaml").write_text(
+        "services:\n  loki:\n    image: grafana/loki\n", encoding="utf-8"
+    )
+
+    reply = orchestrator_gitops._collect(
+        Request(method="inventory.list", config={"path": str(tmp_path)})
+    )
+
+    service = reply.result["entities"]["service"][0]
+    assert "runs_on" not in service
+    assert service["x-orchestrator"]["host_attribution"] == "unknown"
+    assert any("1 of 1 stacks carry no observed host" in w for w in reply.warnings)
+
+
+def test_a_placed_stack_carries_no_attribution_warning(tmp_path: Path) -> None:
+    stack = tmp_path / "grafanaloki"
+    stack.mkdir()
+    (stack / "compose.yaml").write_text(
+        "x-cadastre:\n  host: node-b\nservices:\n  loki:\n    image: grafana/loki\n",
+        encoding="utf-8",
+    )
+
+    reply = orchestrator_gitops._collect(
+        Request(method="inventory.list", config={"path": str(tmp_path)})
+    )
+
+    service = reply.result["entities"]["service"][0]
+    assert service["runs_on"] == "node-b"
+    assert "host_attribution" not in service["x-orchestrator"]
+    assert not any("carry no observed host" in w for w in reply.warnings)
+
+
+def test_the_attribution_marker_is_inside_the_declared_attribute_schema() -> None:
+    """A collector cannot emit a field its own declaration would reject."""
+    from cadastre.plugins.contract import declaration_for
+
+    block = declaration_for("service", plugin="orchestrator-gitops").attributes[
+        "properties"
+    ]["x-orchestrator"]
+    assert block["additionalProperties"] is False
+    assert "host_attribution" in block["properties"]
+    assert "host_attribution_reason" in block["properties"]

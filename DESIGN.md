@@ -293,6 +293,12 @@ The rule that makes this safe: **core logic reads core fields only.** Placement,
 one, the core model is missing a field and that is a model change, not an
 attribute lookup.
 
+One narrow exception, and it interprets nothing: `lookup` indexes the **member
+names** any `x-*` block lists — a list of mappings carrying a `name` — so a
+container inside a stack is reachable by the name a human knows it by. No plugin
+key is special-cased, no value is read for meaning, and no entity is created:
+the answer is the *containing* entity, labelled as a containment hit.
+
 Exposure tiers are **user-defined** in catalog policy (or an exported policy
 bundle). Cadastre
 ships no opinion about what tiers exist. One operator's `public|tailnet|lan` is
@@ -431,7 +437,7 @@ Cadastre does the joining **server-side** and returns decisions.
 | `brief` | ~1.5k tokens. Whole estate, compressed. Session preamble. |
 | `context-for <intent>` | The subset of truth relevant to *one decision*, pre-joined. |
 | `check <artifact>` | Structured violations in a not-yet-committed file. |
-| `lookup <entity>` / `neighbors` | Drill-down. |
+| `lookup <entity>` / `neighbors` | Drill-down, over declared **and** observed. An observed-only hit is labelled as one, never promoted (§1.3). |
 | `drift` | Current divergence. |
 | `stale` | What a human owes attention: stale, unverified, contested (§2.9). |
 | `add` / `update` / `delete` / `annotate` | Gated catalog writes (§2.3). |

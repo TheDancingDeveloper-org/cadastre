@@ -254,6 +254,12 @@ ATTRIBUTE_SCHEMAS: dict[tuple[str, str], dict[str, Any]] = {
                             "additionalProperties": False,
                         },
                     },
+                    # Why the stack has no `runs_on`. A GitOps repo does not
+                    # know its deployment target, and an empty `runs_on` is
+                    # read as agreement with whatever was declared, so the gap
+                    # is stated here rather than left to silence.
+                    "host_attribution": {"type": "string", "enum": ["unknown"]},
+                    "host_attribution_reason": {"type": "string"},
                 },
                 "required": ["compose_services"],
                 "additionalProperties": False,
