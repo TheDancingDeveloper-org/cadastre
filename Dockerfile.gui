@@ -5,7 +5,7 @@ RUN npm install --ignore-scripts
 COPY ui ./
 RUN npm run build
 
-FROM nginx:1.31.3-alpine
+FROM nginx:1.31.4-alpine
 ARG CADASTRE_SOURCE_REVISION=unknown
 ARG CADASTRE_SCHEMA_VERSION=1
 ARG CADASTRE_VERSION=unknown
