@@ -493,3 +493,24 @@ def test_frontend_must_be_able_to_supply_the_requested_tier(
         f["code"] == "fronted-by-validation" and "cannot provide tier" in f["message"]
         for f in findings
     )
+
+
+# -- GitHub #22: Compose override merge tags (!reset / !override) ------------
+
+
+def test_compose_overlay_with_merge_tags_is_checkable(session: Session) -> None:
+    """The overlay used to fail to parse at all; now it checks like any base."""
+    document = check(session, ARTIFACTS / "compose-override-merge-tags.yaml")
+    codes = [finding["code"] for finding in document.data["findings"]]
+    # The tags no longer stop the parser, so placement rules actually run:
+    # a valid host and tier means neither fires.
+    assert "unknown-host" not in codes
+    assert "unknown-exposure-tier" not in codes
+
+
+def test_merge_tags_resolve_to_their_values(session: Session) -> None:
+    """`!override` keeps its value; `!reset` collapses to null."""
+    artifact = parse(ARTIFACTS / "compose-override-merge-tags.yaml", "compose")
+    app = next(service for service in artifact.services if service.name == "app")
+    assert app.ports == (8080,)  # !override sequence survived
+    assert app.secret_refs == ()  # environment !reset null -> nothing to read

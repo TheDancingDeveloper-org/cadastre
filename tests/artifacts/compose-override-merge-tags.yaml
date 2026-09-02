@@ -1,0 +1,13 @@
+# A Compose override overlay using the spec's !reset / !override merge tags.
+# The base parses clean; before the loader understood these tags the overlay
+# could not be checked at all (GitHub #22). Host/expose use the example
+# catalog so the check is about the tags, not placement.
+services:
+  app:
+    image: nginx:1.27
+    x-cadastre:
+      host: app-01
+      expose: internal
+    environment: !reset null
+    ports: !override
+      - "8080:80"
