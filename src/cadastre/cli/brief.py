@@ -120,20 +120,76 @@ def _repos_section(session: Session) -> Section:
     )
 
 
+def _observed_only_secrets_by_store(session: Session) -> dict[str, int]:
+    """Per-store count of secrets a collector saw but no `secret_ref` declares.
+
+    `brief` is the session-context entry point, so an agent reasonably reads
+    its secrets list as complete. Listing only the declared `secret_refs` makes
+    the ~87% of real secrets that are observed-only invisible, and that is how
+    a session concludes "no such credential" for a secret already in the store
+    (the FarmEggs incident, 2026-08-24 / GitHub #24). Counts, not names, keep
+    the context cost bounded while telling the truth about scale.
+    """
+    declared_refs = {secret.ref for secret in session.catalog.secrets}
+    declared_ids = {secret.id for secret in session.catalog.secrets}
+    by_store: dict[str, int] = {}
+    seen: set[tuple[str, str]] = set()
+    for source in session.observed:
+        for secret in source.entities.get("secret", []):
+            ref = getattr(secret, "ref", "") or ""
+            if ref in declared_refs or secret.id in declared_ids:
+                continue
+            key = (secret.id, ref)
+            if key in seen:
+                continue
+            seen.add(key)
+            store = getattr(secret, "store", "") or "(unknown store)"
+            by_store[store] = by_store.get(store, 0) + 1
+    return dict(sorted(by_store.items()))
+
+
 def _secrets_section(session: Session) -> Section:
     catalog = session.catalog
     by_store: dict[str, list[str]] = {}
     for secret in catalog.secrets:
         by_store.setdefault(secret.store, []).append(secret.ref)
-    items = tuple(
+    items = [
         f"{store}: {len(refs)} refs — " + ", ".join(sorted(refs))
         for store, refs in sorted(by_store.items())
-    )
-    return Section(
-        "Secret references",
-        (Bullets(items),),
-        note="References and existence only. No value ever transits this layer.",
-    )
+    ]
+    observed_only = _observed_only_secrets_by_store(session)
+    blocks: list[object] = [Bullets(tuple(items))]
+    if observed_only:
+        total = sum(observed_only.values())
+        blocks.append(
+            Fields(
+                (
+                    (
+                        "declared / observed-only",
+                        f"{len(catalog.secrets)} declared / {total} observed-only",
+                    ),
+                )
+            )
+        )
+        blocks.append(
+            Bullets(
+                tuple(
+                    f"{store}: {count} observed-only"
+                    for store, count in observed_only.items()
+                )
+            )
+        )
+        note = (
+            "The bullet list is the declared `secret_refs` — a curated subset. "
+            f"Collectors have also observed {total} secrets that no declaration "
+            "names (counts above; no values, ever). `cadastre lookup <name>` "
+            "finds an observed-only secret; `cadastre drift --kind secret` lists "
+            "them. Do not conclude a credential is absent from the declared list "
+            "alone."
+        )
+    else:
+        note = "References and existence only. No value ever transits this layer."
+    return Section("Secret references", tuple(blocks), note=note)
 
 
 def _conventions_section(session: Session) -> Section:
@@ -203,6 +259,13 @@ def _data(session: Session) -> dict[str, Any]:
         "secret_refs": [
             {"id": s.id, "ref": s.ref, "store": s.store} for s in catalog.secrets
         ],
+        "secrets": {
+            "declared": len(catalog.secrets),
+            "observed_only_total": sum(
+                _observed_only_secrets_by_store(session).values()
+            ),
+            "observed_only_by_store": _observed_only_secrets_by_store(session),
+        },
         "policy": {
             "exposure": [
                 {
