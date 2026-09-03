@@ -14,7 +14,7 @@ from typing import Any
 
 from cadastre.cli.session import Session
 from cadastre.core import model
-from cadastre.render.document import Bullets, Document, Fields, Section, Table
+from cadastre.render.document import Block, Bullets, Document, Fields, Section, Table
 
 
 def _resources(host: model.Host) -> str:
@@ -158,7 +158,7 @@ def _secrets_section(session: Session) -> Section:
         for store, refs in sorted(by_store.items())
     ]
     observed_only = _observed_only_secrets_by_store(session)
-    blocks: list[object] = [Bullets(tuple(items))]
+    blocks: list[Block] = [Bullets(tuple(items))]
     if observed_only:
         total = sum(observed_only.values())
         blocks.append(
