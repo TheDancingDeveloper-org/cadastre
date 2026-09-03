@@ -9,6 +9,56 @@ The version recorded here is `application_version` in
 `src/cadastre/release-compatibility.json`, which is attested to every released
 image as the schema-compatibility predicate.
 
+## v0.2.3
+
+### Added
+
+- **`lookup` distinguishes a declaration from a collector's confirmation.** A
+  declared entity with no collector behind it read as current truth while being
+  unverifiable — the way an offline host or an un-enumerated hypervisor guest
+  keeps mirroring its declaration with nothing to signal that no collector ever
+  looked. A declared lookup now carries a `confirmation` status: `confirmed` (a
+  collector reported this id), `unconfirmed` (collectors of this kind ran but
+  none reported it), or `unobserved` (no collector reports this kind at all, so
+  the state shown is the declaration only). ([#28])
+
+### Fixed
+
+- **`check` validates Compose overlays that use `!reset` / `!override`.** The
+  shared YAML loader had no constructor for the Compose-spec merge tags, so an
+  overlay stopped at the loader with "could not determine a constructor for the
+  tag" while its base composed clean. The loader now sees through both tags —
+  `!reset` to null, `!override` to the value beneath it — so overlays are
+  checkable like any base file. The tags appear only in Compose, never in a
+  declared catalog file. ([#22])
+- **`lookup` finds observed-only entities by natural name or reference.**
+  Observed-only secrets are keyed `infisical:<store>-<lowercased-key>` while a
+  human types the bare name; exact-id matching missed them and then asserted
+  "no collector has observed one" — the confidently-wrong answer that had a
+  session ask for a credential already in the store. On an exact miss, `lookup`
+  now falls back to a normalised name/reference match and returns the
+  candidates. ([#23])
+- **`brief` counts observed-only secrets instead of hiding them.** The secrets
+  section listed only the declared `secret_refs` and presented them as the
+  whole set; the observed-only secrets a collector had seen were invisible, so
+  an agent reading the brief as the estate map concluded "no such credential"
+  for secrets already in the store. It now shows a declared / observed-only
+  split with per-store counts (names stay out, so context cost stays bounded).
+  ([#24])
+- **`drift` filters reach the CLI and the remote MCP bridge.** The query layer
+  and stdio tool already supported `category` / `kind` / `source` / `limit` /
+  `summary_only`, but the remote MCP bridge forwarded an empty argument map and
+  the CLI wired only `--exit-code` — so over MCP `drift` stayed one monolithic
+  dump that overruns the tool-result cap, and from the shell the filters were
+  unreachable. The bridge now forwards the arguments and the CLI grows the
+  matching flags, including `--summary-only`. ([#25])
+
+[#22]: https://github.com/TheDancingDeveloper-org/cadastre/issues/22
+[#23]: https://github.com/TheDancingDeveloper-org/cadastre/issues/23
+[#24]: https://github.com/TheDancingDeveloper-org/cadastre/issues/24
+[#25]: https://github.com/TheDancingDeveloper-org/cadastre/issues/25
+[#28]: https://github.com/TheDancingDeveloper-org/cadastre/issues/28
+
 ## v0.2.2
 
 ### Fixed
