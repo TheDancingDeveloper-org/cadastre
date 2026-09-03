@@ -260,6 +260,11 @@
         "store": "secrets-manager"
       }
     ],
+    "secrets": {
+      "declared": 3,
+      "observed_only_total": 0,
+      "observed_only_by_store": {}
+    },
     "policy": {
       "exposure": [
         {

@@ -115,8 +115,27 @@ def build_server() -> Any:
     def lookup(entity_id: str, kind: str | None = None) -> str:
         return _remote_tool("lookup", {"entity_id": entity_id, "kind": kind})
 
-    def drift() -> str:
-        return _remote_tool("drift", {})
+    def drift(
+        category: str | None = None,
+        kind: str | None = None,
+        source: str | None = None,
+        entity_id: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        summary_only: bool = False,
+    ) -> str:
+        return _remote_tool(
+            "drift",
+            {
+                "category": category,
+                "kind": kind,
+                "source": source,
+                "entity_id": entity_id,
+                "limit": limit,
+                "cursor": cursor,
+                "summary_only": summary_only,
+            },
+        )
 
     def question(
         question_id: str, subject: str | None = None, value: str | None = None

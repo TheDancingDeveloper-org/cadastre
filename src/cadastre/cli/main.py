@@ -141,6 +141,25 @@ def build_parser(*, include_manifest: bool = False) -> argparse.ArgumentParser:
         action="store_true",
         help="Exit 1 when drift is found. Off by default so CI does not break.",
     )
+    drift.add_argument(
+        "--category",
+        choices=("undeclared", "missing", "differs", "secret-only-in"),
+        help="Only this divergence category.",
+    )
+    drift.add_argument("--kind", help="Only this entity kind (e.g. secret, repo).")
+    drift.add_argument("--source", help="Only divergences attributed to this source.")
+    drift.add_argument("--entity-id", help="Only divergences for this entity id.")
+    drift.add_argument(
+        "--limit",
+        type=int,
+        help="Page size (1-1000). A filtered/paged call returns a next cursor.",
+    )
+    drift.add_argument("--cursor", help="Continue a paged result from its next cursor.")
+    drift.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="Just the counts matrix — small enough for any MCP result cap.",
+    )
 
     observations = sub_parser(
         "observations", "Retained plugin evidence that has no entity form."
@@ -639,7 +658,17 @@ def dispatch(args: argparse.Namespace) -> Document:
             warnings_as_errors=args.warnings_as_errors,
         )
     if args.command == "drift":
-        return drift_cmd.drift(session, exit_code=args.exit_code)
+        return drift_cmd.drift(
+            session,
+            exit_code=args.exit_code,
+            category=args.category,
+            kind=args.kind,
+            source=args.source,
+            entity_id=args.entity_id,
+            limit=args.limit,
+            cursor=args.cursor,
+            summary_only=args.summary_only,
+        )
     if args.command == "collect":
         return collect_cmd.collect(
             session,

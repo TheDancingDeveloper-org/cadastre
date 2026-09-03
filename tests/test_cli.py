@@ -138,3 +138,31 @@ def test_sources_reports_nothing_configured(
     code, out, _ = run(["sources"], capsys)
     assert code == 0
     assert "none configured" in out
+
+
+# -- GitHub #25: drift filters are reachable from the CLI, not just the API --
+
+
+def test_drift_summary_only_flag_is_wired(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code, out, _ = run(["drift", "--summary-only", "--json"], capsys)
+    assert code == 0
+    payload = json.loads(out)
+    assert payload["result"]["pagination"]["summary_only"] is True
+
+
+def test_drift_kind_filter_is_wired(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, _ = run(["drift", "--kind", "secret", "--json"], capsys)
+    assert code == 0
+    payload = json.loads(out)
+    # A filtered call is paged, so it always carries a pagination block.
+    assert "pagination" in payload["result"]
+
+
+def test_drift_rejects_an_out_of_range_limit(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code, _, err = run(["drift", "--limit", "0"], capsys)
+    assert code != 0
+    assert "between 1 and 1000" in err

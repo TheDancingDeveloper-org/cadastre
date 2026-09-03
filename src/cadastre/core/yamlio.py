@@ -48,6 +48,43 @@ _LineLoader.add_constructor(
 )
 
 
+def _construct_untagged(loader: _LineLoader, node: yaml.Node) -> Any:
+    """Construct a node as if it carried no explicit tag.
+
+    Used to see through a Compose merge tag to the value beneath it, resolving
+    scalars to their implicit type (int, bool, null) rather than leaving them
+    as the raw string a tagged construction would return.
+    """
+    if isinstance(node, yaml.ScalarNode):
+        implicit = loader.resolve(yaml.ScalarNode, node.value, (True, False))
+        return loader.construct_object(
+            yaml.ScalarNode(
+                implicit, node.value, node.start_mark, node.end_mark, node.style
+            ),
+            deep=True,
+        )
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node, deep=True)
+    if isinstance(node, yaml.MappingNode):
+        return _construct_mapping(loader, node)
+    return None
+
+
+def _construct_reset(loader: _LineLoader, node: yaml.Node) -> None:
+    """`!reset` marks a key for removal when a Compose override is merged; as a
+    standalone value it carries no content, so it resolves to null."""
+    return None
+
+
+# Compose override files (`!reset`, `!override`) are the reason `cadastre check`
+# could not validate an overlay: the base compose parsed clean, but the tags in
+# the overlay stopped at the loader. These tags only appear in Compose, never in
+# a declared catalog file, so teaching the shared loader to see through them
+# makes overlays checkable without loosening anything the catalog relies on.
+_LineLoader.add_constructor("!reset", _construct_reset)
+_LineLoader.add_constructor("!override", _construct_untagged)
+
+
 def load_yaml(path: Path, *, rel: str | None = None) -> Any:
     """Parse one YAML file, keeping line numbers. An empty file is ``None``."""
     display = rel or str(path)

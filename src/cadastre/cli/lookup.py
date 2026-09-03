@@ -106,6 +106,84 @@ def _observed_by_id(
     return out
 
 
+@dataclass(frozen=True)
+class _Candidate:
+    """An observed entity whose *name or reference* matches, not its id.
+
+    Observed-only entities carry store-derived ids (`infisical:apps-<key>`)
+    while the name a human knows is the bare key or the ref's last segment.
+    Exact-id matching alone answers `missing_entity` for a secret the catalog
+    is holding under a different-looking id — the confidently-wrong answer this
+    project exists to replace (GitHub #23).
+    """
+
+    source: ObservedSource
+    kind: str
+    entity: model.Entity
+    matched_on: str
+
+
+def _normalize(text: str) -> str:
+    """Fold a name to comparable form: lowercase, non-alphanumerics to gaps.
+
+    `HOMELAB_FARMEGGS_DEV_API_SECRET`, `homelab-farmeggs-dev-api-secret` and
+    the store-keyed `infisical:apps-homelab-farmeggs-dev-api-secret` all share
+    the same tail once folded, which is what lets a natural name find them.
+    """
+    folded = "".join(ch if ch.isalnum() else "-" for ch in text.lower())
+    return "-".join(part for part in folded.split("-") if part)
+
+
+def _candidate_strings(entity: model.Entity) -> list[tuple[str, str]]:
+    """(field, value) pairs an observed entity may be recognised by."""
+    pairs = [("id", entity.id)]
+    ref = getattr(entity, "ref", None)
+    if isinstance(ref, str) and ref:
+        pairs.append(("ref", ref))
+        # The trailing key segment is the name humans actually use.
+        pairs.append(("ref", ref.rstrip("/").split("/")[-1]))
+    return pairs
+
+
+#: Never surface an unbounded name match; a short query would match half the
+#: estate. The cap keeps the answer legible and the token cost bounded.
+_MAX_CANDIDATES = 25
+
+
+def _observed_candidates(
+    session: Session, ident: str, *, kind: str | None
+) -> list[_Candidate]:
+    """Observed entities whose name or ref contains the query, by exact id miss.
+
+    Deliberately one-directional: the query must be contained in a candidate's
+    id or ref, not the reverse, so `token` does not drag in every credential
+    while `homelab-farmeggs-dev-api-secret` still finds its store-keyed row.
+    """
+    want = _normalize(ident)
+    if len(want) < 3:
+        return []
+    seen: set[tuple[str, str, str]] = set()
+    out: list[_Candidate] = []
+    for source in session.observed:
+        for entity_kind in session.registry.kinds:
+            if kind is not None and entity_kind != kind:
+                continue
+            for entity in source.entities.get(entity_kind, []):
+                if entity.id == ident:
+                    continue  # exact hits are handled before we get here
+                key = (source.source, entity_kind, entity.id)
+                if key in seen:
+                    continue
+                for field, value in _candidate_strings(entity):
+                    hay = _normalize(value)
+                    if want == hay or want in hay:
+                        seen.add(key)
+                        out.append(_Candidate(source, entity_kind, entity, field))
+                        break
+    out.sort(key=lambda c: (c.kind, c.entity.id, c.source.source))
+    return out
+
+
 def _members(entity: model.Entity) -> Iterator[tuple[str, str]]:
     """`(path, name)` for every named member a namespaced block declares.
 
@@ -207,6 +285,55 @@ def _untrusted_notes_section(entity: model.Entity) -> Section | None:
     )
 
 
+def _confirmation(
+    session: Session, entity_kind: str, observed: list[tuple[str, model.Entity]]
+) -> dict[str, Any]:
+    """Whether a collector confirms this declared entity, or only intent does.
+
+    A declared record with no collector behind it reads as current truth while
+    being unverifiable — the failure mode where a hypervisor guest or an
+    offline host keeps mirroring its declaration and nothing signals that no
+    collector ever looked (GitHub #28). The distinction is: confirmed (a
+    collector reported this id), unconfirmed (collectors of this kind ran but
+    none reported it — gone, moved, or outside their scope), or unobserved (no
+    collector reports this kind at all, so the state here is declaration only).
+    """
+    if observed:
+        return {
+            "status": "confirmed",
+            "collectors": sorted({source for source, _ in observed}),
+        }
+    kind_collectors = sorted(
+        {
+            source.source
+            for source in session.observed
+            if source.entities.get(entity_kind)
+        }
+    )
+    if kind_collectors:
+        return {"status": "unconfirmed", "collectors": kind_collectors}
+    return {"status": "unobserved", "collectors": []}
+
+
+def _confirmation_section(entity_kind: str, confirmation: dict[str, Any]) -> Section:
+    status = confirmation["status"]
+    if status == "unconfirmed":
+        collectors = ", ".join(confirmation["collectors"])
+        body = (
+            f"Collectors of {entity_kind} ran ({collectors}) but none reported "
+            f"this id. It may be gone, moved, or outside their scope. The state "
+            "shown above is the declaration, not a live observation."
+        )
+    else:  # unobserved
+        body = (
+            f"No collector reports {entity_kind} in this estate, so nothing "
+            "confirms this record. The state shown above is the declaration "
+            "only — trust it as intent, not as a probe. `cadastre sources` "
+            "lists what does and does not run."
+        )
+    return Section("Not confirmed by a collector", (Para(body),))
+
+
 def _declared_document(
     session: Session, ident: str, entity_kind: str, entity: model.Entity
 ) -> Document:
@@ -253,11 +380,16 @@ def _declared_document(
             )
         )
 
+    confirmation = _confirmation(session, entity_kind, observed)
+    if confirmation["status"] != "confirmed":
+        sections.append(_confirmation_section(entity_kind, confirmation))
+
     location = session.catalog.location(entity_kind, entity.id)
     data: dict[str, Any] = {
         "kind": entity_kind,
         "resolution": "declared",
         "declared": True,
+        "confirmation": confirmation,
         "entity": entity_to_dict(entity, registry=session.registry),
         "declared_at": str(location) if location else None,
         "relations": [
@@ -492,6 +624,73 @@ def _contained_document(
     )
 
 
+def _candidates_document(
+    session: Session, ident: str, candidates: list[_Candidate]
+) -> Document:
+    """Name/ref matches for a query that is no entity's exact id."""
+    shown = candidates[:_MAX_CANDIDATES]
+    more = len(candidates) - len(shown)
+    plural = "y" if len(candidates) == 1 else "ies"
+    blurb = (
+        f"No entity is declared or observed with the exact id {ident!r}. "
+        f"{len(candidates)} observed entit{plural} match it by name or "
+        "reference — reachable as evidence, look one up by its exact id to see "
+        "it in full."
+    )
+    if more > 0:
+        blurb += f" Showing the first {len(shown)}; {more} more match."
+    section = Section(
+        f"{ident} — no such id, but observed evidence matches",
+        (
+            Para(blurb),
+            Table(
+                ("kind", "observed id", "source", "matched on", "ref"),
+                tuple(
+                    (
+                        candidate.kind,
+                        candidate.entity.id,
+                        candidate.source.source,
+                        candidate.matched_on,
+                        str(getattr(candidate.entity, "ref", "") or ""),
+                    )
+                    for candidate in shown
+                ),
+            ),
+        ),
+        note=(
+            "Name match, not identity. These are observed, not declared "
+            "(DESIGN §1.3): reachable as evidence, not promoted. `cadastre "
+            "lookup <observed id>` shows one in full; `cadastre add` is the "
+            "human decision that would declare it."
+        ),
+    )
+    return Document(
+        title=f"cadastre lookup {ident}",
+        sections=(section,),
+        provenance=session.provenance(),
+        data={
+            "kind": None,
+            "resolution": "name-match",
+            "declared": False,
+            "query": ident,
+            "candidates": [
+                {
+                    "kind": candidate.kind,
+                    "id": candidate.entity.id,
+                    "source": candidate.source.source,
+                    "matched_on": candidate.matched_on,
+                    "ref": getattr(candidate.entity, "ref", None),
+                    "entity": entity_to_dict(
+                        candidate.entity, registry=session.registry
+                    ),
+                }
+                for candidate in shown
+            ],
+            "candidate_total": len(candidates),
+        },
+    )
+
+
 def _unresolved(session: Session, ident: str, *, kind: str | None) -> Document:
     """Nothing declared. Try observed, then containment, then give up honestly."""
     observed = _observed_by_id(session, ident, kind=kind)
@@ -508,12 +707,19 @@ def _unresolved(session: Session, ident: str, *, kind: str | None) -> Document:
     if contained:
         return _contained_document(session, ident, contained)
 
+    # Before claiming nothing was observed, actually search the observed side
+    # by name and reference — the exact-id miss above only ruled out one of
+    # several id schemes (GitHub #23).
+    candidates = _observed_candidates(session, ident, kind=kind)
+    if candidates:
+        return _candidates_document(session, ident, candidates)
+
     known = ", ".join(sorted(session.registry.kinds))
     raise MissingEntityError(
         f"no entity with id {ident!r} in the catalog, and no collector has "
-        f"observed one. Ids are unique per kind; kinds are: {known}. "
-        f"If you expected it to exist, the catalog is wrong — say so rather "
-        f"than assuming a name."
+        f"observed one — by that id, name, or reference. Ids are unique per "
+        f"kind; kinds are: {known}. If you expected it to exist, the catalog "
+        f"is wrong — say so rather than assuming a name."
     )
 
 
