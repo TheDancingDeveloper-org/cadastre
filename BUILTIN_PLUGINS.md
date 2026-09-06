@@ -35,6 +35,7 @@ interval renders as stale by design, so the two numbers belong to one decision.
 | `dns-cloudflare` | Cloudflare API | `dns.zones`, `dns.records` | domain | Zone:Read token | 1 hour |
 | `vpn-tailscale` | Tailscale API | `network.list`, `network.members` | network, host | devices read token | 1 day |
 | `hypervisor-proxmox` | Proxmox API | `inventory.list` | host | `PVEAuditor`-equivalent token | 1 day |
+| `hypervisor-hyperv` | Hyper-V host (read-only JSON inventory) | `inventory.list` | host | read-only inventory endpoint token | 1 day |
 | `registry-crates` | crates.io | `inventory.list` | `extra.published` | none | 1 day |
 | `work-markdown` † | local Markdown files | `work.findings` | markdown_finding | filesystem read | 1 hour |
 | `work-git` † | local Git checkout | `work.repo-state` | repo_checkout | filesystem read | 15 min |
@@ -450,6 +451,44 @@ reports at least itself, so zero hosts is evidence about the credential and
 never about the estate. `collect` keeps the previous evidence and marks the
 source stale instead of recording a successful empty result, which is what
 stops `drift` announcing every declared host as `missing`.
+
+## `hypervisor-hyperv`
+
+**Integration.** The Proxmox collector's twin for a Hyper-V estate. Use it for
+Hyper-V guest inventory. `inventory.list` GETs a read-only JSON inventory of the
+host's guests — the canonical enumeration is PowerShell (`Get-VM |
+ConvertTo-Json`), which a small read-only shim on or beside the host exposes over
+HTTP — and emits host resource facts and placement relations: each guest as a
+`server` with `hosted_in` set to its Hyper-V host, and the host itself as a
+`hypervisor`. Config: `endpoint` (required), `token_env`, `path` (default
+`/vms`), `verify_tls` (default `true`), `hypervisor` (a fallback host name when
+the payload omits `ComputerName`), and `network`. It has no mutation request and
+does not collect VM config, console, checkpoints, or guest credentials.
+
+```yaml
+- id: hyperv
+  plugin: hypervisor-hyperv
+  command: [cadastre-plugin-hypervisor-hyperv]
+  methods: [inventory.list]
+  config:
+    endpoint: https://hyperv.example.invalid:5986
+    token_env: CADASTRE_HV_TOKEN
+    path: /vms
+```
+
+**What it reflects.** Only what the neutral `host` model already carries: id,
+role, `hosted_in`, and resources (vCPU, memory, disk where the payload reports
+it). A stopped guest reports zero assigned memory, so the collector falls back
+to the configured startup memory rather than dropping the field. Run-state
+beyond existence is deliberately not reflected — the model has no such field and
+`hypervisor-proxmox` reflects none either; the two hypervisor collectors must
+agree on what a `host` observation means.
+
+**An empty inventory is an ordinary state.** Unlike Proxmox, a Hyper-V host with
+no guests legitimately answers with an empty list, and the host is not itself an
+item in that list. This plugin therefore keeps the default `empty_expected:
+true` for `host`: zero guests is a credible reading of a fresh or emptied host,
+not evidence about the credential.
 
 ## `registry-crates`
 

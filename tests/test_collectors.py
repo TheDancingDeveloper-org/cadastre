@@ -30,6 +30,7 @@ from cadastre.plugins.collectors import (
     dns_cloudflare,
     forge_forgejo,
     forge_github,
+    hypervisor_hyperv,
     hypervisor_proxmox,
     ingress_caddy,
     orchestrator_gitops,
@@ -267,8 +268,22 @@ CLOUDFLARE_RECORDS = {
 
 TAILSCALE = {
     "devices": [
-        {"hostname": "app-01.tail.invalid", "tags": ["tag:app-tier"]},
-        {"hostname": "ws-01", "tags": []},
+        {
+            "hostname": "app-01.tail.invalid",
+            "tags": ["tag:app-tier"],
+            "online": True,
+            "lastSeen": "2026-09-01T12:00:00Z",
+            "addresses": ["100.64.0.1"],
+            "os": "linux",
+        },
+        {
+            "hostname": "ws-01",
+            "tags": [],
+            "online": False,
+            "lastSeen": "2026-07-01T09:00:00Z",
+            "addresses": ["100.64.0.2"],
+            "os": "windows",
+        },
     ]
 }
 
@@ -286,6 +301,28 @@ PROXMOX = {
     ]
 }
 
+HYPERV = {
+    "value": [
+        {
+            "Name": "app-02",
+            "ComputerName": "hv-02",
+            "State": 2,
+            "ProcessorCount": 8,
+            "MemoryAssigned": 34359738368,
+            "MemoryStartup": 4294967296,
+            "DiskSizeBytes": 536870912000,
+        },
+        {
+            "Name": "db-02",
+            "ComputerName": "hv-02",
+            "State": 3,
+            "ProcessorCount": 4,
+            "MemoryAssigned": 0,
+            "MemoryStartup": 8589934592,
+        },
+    ]
+}
+
 CRATES = {
     "crate": {
         "name": "cadastre",
@@ -296,9 +333,19 @@ CRATES = {
 }
 
 
-def _parses(result: dict[str, Any]) -> None:
-    """Whatever a collector emits must survive the same parser `declared/` uses."""
-    parse_source({"entities": result.get("entities", {})}, Located("fixture"))
+def _parses(
+    result: dict[str, Any], extensions: dict[str, set[str]] | None = None
+) -> None:
+    """Whatever a collector emits must survive the same parser `declared/` uses.
+
+    `extensions` mirrors what `collect` derives from the plugin's declaration:
+    the `x-<plugin>` attribute names a source is allowed to attach as evidence.
+    """
+    parse_source(
+        {"entities": result.get("entities", {})},
+        Located("fixture"),
+        extensions=extensions,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1358,7 +1405,25 @@ def test_tailscale_emits_a_vendor_neutral_network() -> None:
     assert result["entities"]["network"] == [{"id": "vpn-0", "class": "private"}]
     assert "tailnet" not in json.dumps(result)
     assert {h["id"] for h in result["entities"]["host"]} == {"app-01", "ws-01"}
-    _parses(result)
+    _parses(result, extensions={"host": {"x-tailscale"}})
+
+
+def test_tailscale_records_liveness_so_an_offline_node_reads_as_such() -> None:
+    """#34: a tailnet node's online/last-seen/addresses ride as evidence, not
+    as neutral host fields, so a dormant node is distinguishable from a live
+    one without the collector inventing a state the model does not have."""
+    result = vpn_tailscale.transform(TAILSCALE, {"network": "vpn-0"})
+    hosts = {h["id"]: h for h in result["entities"]["host"]}
+    assert hosts["app-01"]["x-tailscale"] == {
+        "online": True,
+        "last_seen": "2026-09-01T12:00:00Z",
+        "addresses": ["100.64.0.1"],
+        "os": "linux",
+    }
+    # An offline node is still a member, but its liveness says otherwise.
+    assert hosts["ws-01"]["reachable_from"] == ["vpn-0"]
+    assert hosts["ws-01"]["x-tailscale"]["online"] is False
+    _parses(result, extensions={"host": {"x-tailscale"}})
 
 
 def test_proxmox_reports_guests_and_their_hypervisor() -> None:
@@ -1368,6 +1433,24 @@ def test_proxmox_reports_guests_and_their_hypervisor() -> None:
     assert hosts["app-01"]["hosted_in"] == "hv-01"
     assert hosts["app-01"]["resources"]["memory_gb"] == 32
     assert "local" not in hosts  # storage is not a host
+    _parses(result)
+
+
+def test_hyperv_reports_guests_and_synthesises_their_host() -> None:
+    result = hypervisor_hyperv.transform(HYPERV, {})
+    hosts = {h["id"]: h for h in result["entities"]["host"]}
+    # The Hyper-V host is not a guest in the list; it is synthesised from the
+    # ComputerName the guests report, mirroring the Proxmox `node`.
+    assert hosts["hv-02"]["role"] == "hypervisor"
+    assert "hosted_in" not in hosts["hv-02"]
+    assert hosts["app-02"]["hosted_in"] == "hv-02"
+    assert hosts["app-02"]["resources"]["cpu_cores"] == 8
+    assert hosts["app-02"]["resources"]["memory_gb"] == 32
+    assert hosts["app-02"]["resources"]["disk_gb"] == 500
+    # A stopped guest reports zero assigned memory; fall back to startup memory.
+    assert hosts["db-02"]["resources"]["memory_gb"] == 8
+    assert "Get-VM" not in json.dumps(result)
+    assert "Msvm" not in json.dumps(result)
     _parses(result)
 
 
@@ -1669,6 +1752,7 @@ ALL_COLLECTORS = (
     dns_cloudflare,
     forge_forgejo,
     forge_github,
+    hypervisor_hyperv,
     hypervisor_proxmox,
     ingress_caddy,
     orchestrator_gitops,
