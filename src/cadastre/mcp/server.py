@@ -170,7 +170,7 @@ def build_server() -> Any:
     """Register tools with the optional MCP SDK. Write tools join the
     read-only set only when write mode is enabled (DESIGN §2.4)."""
     try:
-        from mcp.server.fastmcp import FastMCP
+        from mcp.server.fastmcp import FastMCP  # type: ignore[attr-defined]
     except ImportError:
         try:
             from mcp.server.mcpserver import MCPServer
