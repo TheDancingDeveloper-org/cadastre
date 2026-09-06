@@ -1,11 +1,11 @@
-FROM node:26.7.0-alpine AS build
+FROM node:26.8.1-alpine AS build
 WORKDIR /ui
 COPY ui/package.json ui/package-lock.json* ./
 RUN npm install --ignore-scripts
 COPY ui ./
 RUN npm run build
 
-FROM nginx:1.31.3-alpine
+FROM nginx:1.31.4-alpine
 ARG CADASTRE_SOURCE_REVISION=unknown
 ARG CADASTRE_SCHEMA_VERSION=1
 ARG CADASTRE_VERSION=unknown
