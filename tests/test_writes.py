@@ -38,7 +38,7 @@ def test_source_authoritative_add_refuses_without_mutation(
 ) -> None:
     before = CatalogStore.open(sqlite_catalog, read_only=True).revision
     with pytest.raises(
-        WriteRefused, match=r"REFUSED  add hypervisor-proxmox\.host"
+        WriteRefused, match=r"REFUSED  add hypervisor-hyperv\.host"
     ) as refused:
         write(
             sqlite_catalog,
@@ -46,7 +46,7 @@ def test_source_authoritative_add_refuses_without_mutation(
             "host",
             values={"id": "new-node", "role": "server"},
         )
-    assert "cadastre collect --source hypervisor-proxmox" in str(refused.value)
+    assert "cadastre collect --source hypervisor-hyperv" in str(refused.value)
     with CatalogStore.open(sqlite_catalog, read_only=True) as store:
         assert store.revision == before
 

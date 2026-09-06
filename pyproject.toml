@@ -48,6 +48,7 @@ cadastre-plugin-orchestrator-gitops = "cadastre.plugins.collectors.orchestrator_
 cadastre-plugin-dns-cloudflare = "cadastre.plugins.collectors.dns_cloudflare:main"
 cadastre-plugin-vpn-tailscale = "cadastre.plugins.collectors.vpn_tailscale:main"
 cadastre-plugin-hypervisor-proxmox = "cadastre.plugins.collectors.hypervisor_proxmox:main"
+cadastre-plugin-hypervisor-hyperv = "cadastre.plugins.collectors.hypervisor_hyperv:main"
 cadastre-plugin-registry-crates = "cadastre.plugins.collectors.registry_crates:main"
 cadastre-plugin-work-markdown = "cadastre.plugins.collectors.work_markdown:main"
 cadastre-plugin-work-git = "cadastre.plugins.collectors.work_git:main"

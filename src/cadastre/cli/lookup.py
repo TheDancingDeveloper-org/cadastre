@@ -293,21 +293,34 @@ def _confirmation(
     A declared record with no collector behind it reads as current truth while
     being unverifiable — the failure mode where a hypervisor guest or an
     offline host keeps mirroring its declaration and nothing signals that no
-    collector ever looked (GitHub #28). The distinction is: confirmed (a
-    collector reported this id), unconfirmed (collectors of this kind ran but
-    none reported it — gone, moved, or outside their scope), or unobserved (no
-    collector reports this kind at all, so the state here is declaration only).
+    collector ever looked (GitHub #28). The distinction is: confirmed (a fresh
+    collector reported this id), stale (a collector reported it but its most
+    recent run failed or is past its refresh window, so the record mirrors the
+    last thing a now-silent collector saw), unconfirmed (collectors of this
+    kind ran but none reported it — gone, moved, or outside their scope), or
+    unobserved (no collector reports this kind at all, so the state here is
+    declaration only).
     """
-    if observed:
+    matched_names = {source for source, _ in observed}
+    matched_sources = [s for s in session.observed if s.source in matched_names]
+    fresh = sorted({s.source for s in matched_sources if not _stale(session, s)})
+    if fresh:
+        return {"status": "confirmed", "collectors": fresh}
+    if matched_sources:
+        # A collector did report this id, but its most recent run is stale (it
+        # failed to reach its target, or is past its TTL). Reporting it as
+        # `confirmed` is exactly the #28 trap: the record looks probe-backed
+        # while its only evidence is a collection that has since gone dark.
         return {
-            "status": "confirmed",
-            "collectors": sorted({source for source, _ in observed}),
+            "status": "stale",
+            "collectors": sorted(matched_names),
+            "as_of": max(s.as_of for s in matched_sources),
         }
     kind_collectors = sorted(
         {
             source.source
             for source in session.observed
-            if source.entities.get(entity_kind)
+            if source.entities.get(entity_kind) and not _stale(session, source)
         }
     )
     if kind_collectors:
@@ -317,7 +330,17 @@ def _confirmation(
 
 def _confirmation_section(entity_kind: str, confirmation: dict[str, Any]) -> Section:
     status = confirmation["status"]
-    if status == "unconfirmed":
+    if status == "stale":
+        collectors = ", ".join(confirmation["collectors"])
+        since = confirmation.get("as_of")
+        body = (
+            f"The collector(s) that reported this id ({collectors}) are stale: "
+            f"no fresh collection has confirmed it since {since}. The last run "
+            "failed to reach its target or is past its refresh window, so the "
+            "state shown above is the last thing a now-silent collector saw, "
+            "not a live observation."
+        )
+    elif status == "unconfirmed":
         collectors = ", ".join(confirmation["collectors"])
         body = (
             f"Collectors of {entity_kind} ran ({collectors}) but none reported "

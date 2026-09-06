@@ -101,6 +101,7 @@ def _builtin_plugins() -> tuple[RegisteredPlugin, ...]:
         ("dns-cloudflare", ("DNS",), "source", ("domain",)),
         ("vpn-tailscale", ("Network",), "source", ("host", "network")),
         ("hypervisor-proxmox", ("Inventory",), "source", ("host",)),
+        ("hypervisor-hyperv", ("Inventory",), "source", ("host",)),
         ("registry-crates", (), "source", ()),
     )
     result: list[RegisteredPlugin] = []

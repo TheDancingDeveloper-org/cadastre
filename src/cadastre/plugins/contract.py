@@ -234,6 +234,28 @@ EMPTINESS_NOT_CREDIBLE: dict[str, tuple[str, ...]] = {
 #: the catalog's own — §2e); the compose-file service/container inventory
 #: that used to be one entity per compose service now lives here instead.
 ATTRIBUTE_SCHEMAS: dict[tuple[str, str], dict[str, Any]] = {
+    # Tailnet liveness (#34). The neutral `host` carries membership
+    # (`reachable_from`), but nowhere to say a node is offline or last seen an
+    # hour ago — and a device the control plane reports as long-gone should not
+    # read as a current, reachable host. That evidence rides here so a reader
+    # can tell an active node from a dormant one without the collector inventing
+    # a state field the model does not have.
+    ("vpn-tailscale", "host"): {
+        "type": "object",
+        "properties": {
+            "x-tailscale": {
+                "type": "object",
+                "properties": {
+                    "online": {"type": "boolean"},
+                    "last_seen": {"type": "string"},
+                    "addresses": {"type": "array", "items": {"type": "string"}},
+                    "os": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        "additionalProperties": True,
+    },
     ("orchestrator-gitops", "service"): {
         "type": "object",
         "properties": {

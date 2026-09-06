@@ -27,6 +27,31 @@ CAPABILITIES = ("Network",)
 DEFAULT_ENDPOINT = "https://api.tailscale.com"
 
 
+def _liveness(item: dict[str, Any]) -> dict[str, Any]:
+    """The tailnet's own view of a device: is it up, when was it last seen,
+    where does it answer, and what is it (#34). Carried as evidence, not as
+    neutral host fields — the model has no home for any of it, and a node the
+    control plane reports as long-gone must not read as a current host.
+    """
+    evidence: dict[str, Any] = {}
+    if isinstance(item.get("online"), bool):
+        evidence["online"] = item["online"]
+    last_seen = item.get("lastSeen") or item.get("last_seen")
+    if isinstance(last_seen, str) and last_seen:
+        evidence["last_seen"] = last_seen
+    addresses = [
+        str(address)
+        for address in item.get("addresses") or []
+        if isinstance(address, str) and address
+    ]
+    if addresses:
+        evidence["addresses"] = addresses
+    os_name = item.get("os")
+    if isinstance(os_name, str) and os_name:
+        evidence["os"] = os_name
+    return evidence
+
+
 def transform(payload: Any, options: dict[str, Any]) -> dict[str, Any]:
     """Device list -> a network entity and the hosts reachable from it."""
     network_id = str(options.get("network") or "vpn-0")
@@ -50,6 +75,9 @@ def transform(payload: Any, options: dict[str, Any]) -> dict[str, Any]:
         ]
         if tags:
             entity["tags"] = sorted(tags)
+        liveness = _liveness(item)
+        if liveness:
+            entity["x-tailscale"] = liveness
         hosts.append(entity)
     hosts.sort(key=lambda h: str(h["id"]))
     return {

@@ -341,3 +341,40 @@ def test_declared_host_a_collector_ran_but_missed_is_unconfirmed(
     assert document.data["confirmation"]["status"] == "unconfirmed"
     assert document.data["confirmation"]["collectors"] == ["orchestrator"]
     assert "none reported this id" in render_text(document)
+
+
+def test_declared_host_a_stale_collector_reported_is_not_confirmed(
+    session: Session,
+) -> None:
+    """#28: a collector that reported this id but has since gone dark (failed,
+    or past its refresh window) must not keep the record reading as live truth.
+    The record still resolves, but the confirmation reads stale, with the last
+    time it was seen."""
+    host_id = _a_declared_host(session)
+    observed_host = model.Host(id=host_id)
+    stale = dataclasses.replace(_observed(observed_host), ok=False, error="unreachable")
+    document = lookup(_with(session, stale), host_id)
+
+    assert document.data["confirmation"]["status"] == "stale"
+    assert document.data["confirmation"]["collectors"] == ["orchestrator"]
+    assert document.data["confirmation"]["as_of"] == AS_OF
+    text = render_text(document)
+    assert "Not confirmed by a collector" in text
+    assert f"no fresh collection has confirmed it since {AS_OF}" in text
+
+
+def test_a_fresh_collector_still_confirms_despite_a_stale_one(
+    session: Session,
+) -> None:
+    """A stale source does not poison a fresh confirmation: if any live
+    collector reports the id, it is confirmed and names only the fresh ones."""
+    host_id = _a_declared_host(session)
+    observed_host = model.Host(id=host_id)
+    fresh = _observed(observed_host, source="orchestrator")
+    stale = dataclasses.replace(
+        _observed(observed_host, source="proxmox"), ok=False, error="unreachable"
+    )
+    document = lookup(_with(session, fresh, stale), host_id)
+
+    assert document.data["confirmation"]["status"] == "confirmed"
+    assert document.data["confirmation"]["collectors"] == ["orchestrator"]
