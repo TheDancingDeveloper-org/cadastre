@@ -9,6 +9,52 @@ The version recorded here is `application_version` in
 `src/cadastre/release-compatibility.json`, which is attested to every released
 image as the schema-compatibility predicate.
 
+## v0.2.4
+
+### Added
+
+- **Hyper-V hypervisor collector.** Cadastre had a Proxmox collector but none
+  for Hyper-V, so a Hyper-V guest was unobserved where an equivalent Proxmox
+  guest resolved in `lookup`. The new `hypervisor-hyperv` collector reads a
+  read-only JSON inventory of the host's guests (the `Get-VM` shape, exposed
+  over HTTP by a small read-only shim) and emits the same neutral `host`
+  observations Proxmox does — each guest as a `server` with `hosted_in`, the
+  host itself as a `hypervisor` — reflecting only what the model already
+  carries. A guestless host is a credible empty, so it keeps the default
+  `empty_expected` rather than Proxmox's override. ([#35])
+
+- **Tailnet liveness on the Tailscale collector.** `vpn-tailscale` already
+  emitted hosts, but nothing distinguished a live tailnet node from a dormant
+  one, so an offline node read as a current host. It now attaches `online`,
+  `last_seen`, `addresses`, and `os` as `x-tailscale` evidence — the same
+  attribute mechanism `orchestrator-gitops` uses — because the neutral `host`
+  has no home for any of it and inventing a state field would put the two host
+  collectors at odds. ([#34])
+
+### Fixed
+
+- **`lookup` no longer reads a stale collector as confirmation.** The v0.2.3
+  `confirmation` status read `confirmed` whenever any collector had reported an
+  id — including one whose most recent run failed (`unreachable`) or is past
+  its TTL, whose prior entities `collect` deliberately retains. The record then
+  read as probe-backed while its only evidence had since gone dark — the same
+  "looks current while unverified" failure the confirmation work set out to
+  close. A match from a stale source now yields a `stale` status ("no fresh
+  collection has confirmed it since `<as_of>`") rather than `confirmed`, and a
+  fresh collector still confirms despite a stale one beside it. ([#28])
+
+### Changed
+
+- **MCP SDK and base-image bumps.** The MCP SDK moves from 2.0.0 to 2.1.1,
+  which drops `FastMCP` from `mcp.server.fastmcp`; the adapter already falls
+  back to `mcp.server.mcpserver.MCPServer`, so both transports are unchanged for
+  callers. The `node`, `nginx`, and `python` base images and the GUI toolchain
+  are bumped alongside it. These change the bytes of the released images and
+  wheel without changing behaviour.
+
+[#34]: https://github.com/TheDancingDeveloper-org/cadastre/issues/34
+[#35]: https://github.com/TheDancingDeveloper-org/cadastre/issues/35
+
 ## v0.2.3
 
 ### Added
