@@ -77,7 +77,7 @@ def warn_if_below_minimum_client() -> None:
 def build_server() -> Any:
     """Build the normal stdio MCP server with every tool forced remote."""
     try:
-        from mcp.server.fastmcp import FastMCP
+        from mcp.server.fastmcp import FastMCP  # type: ignore[attr-defined]
     except ImportError:
         try:
             from mcp.server.mcpserver import MCPServer
