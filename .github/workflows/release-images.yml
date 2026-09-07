@@ -42,7 +42,7 @@ jobs:
     # Release builds run on the trusted self-hosted pool: the registry login
     # and signing identity are runner-managed and never leave it. This is a
     # tag-gated workflow, so it only ever builds a reviewed commit.
-    runs-on: [self-hosted, node-b, linux, x64, docker, publish]
+    runs-on: [self-hosted, docker, publish]
     env:
       CADASTRE_REGISTRY: ghcr.io
     steps:
