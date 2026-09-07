@@ -19,7 +19,7 @@ jobs:
     # Nothing here needs a Docker daemon, so this takes the general pool rather
     # than restricting itself to the two `publish` workers. No GitHub-hosted
     # runner may build a release artifact; this workflow is tag-gated.
-    runs-on: [self-hosted, node-b, linux, x64, rust]
+    runs-on: [self-hosted]
     steps:
       - uses: actions/checkout@v7
 
