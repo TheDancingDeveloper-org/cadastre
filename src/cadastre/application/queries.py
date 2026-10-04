@@ -42,6 +42,51 @@ class QueryService:
     def lookup(self, entity_id: str, *, kind: str | None = None) -> Document:
         return lookup.lookup(self._session(), entity_id, kind=kind)
 
+    def search(
+        self, query: str, *, kind: str | None = None, limit: int | None = None
+    ) -> Document:
+        from cadastre.cli import search
+
+        return search.search(self._session(), query, kind=kind, limit=limit)
+
+    def lookup_or_search(
+        self,
+        entity_id: str | None,
+        *,
+        kind: str | None = None,
+        query: str | None = None,
+        limit: int | None = None,
+    ) -> Document:
+        """`lookup` addressed by id, or searched by words — whichever was given.
+
+        An id wins when both are present: it is the more specific request.
+        """
+        if entity_id:
+            return self.lookup(entity_id, kind=kind)
+        if query:
+            return self.search(query, kind=kind, limit=limit)
+        from cadastre.core.errors import UsageError
+
+        raise UsageError(
+            "lookup needs `entity_id` (an exact id, e.g. 'node-b') or `query` "
+            "(free text, e.g. 'komodo api key')"
+        )
+
+    def credential_for(self, service: str, action: str | None = None) -> Document:
+        from cadastre.cli import search
+
+        return search.credential_for(self._session(), service, action)
+
+    def dns_chain(self, hostname: str) -> Document:
+        from cadastre.cli import dns_chain
+
+        return dns_chain.dns_chain(self._session(), hostname)
+
+    def secret_describe(self, ref: str) -> Document:
+        from cadastre.cli import secret_describe
+
+        return secret_describe.secret_describe(self._session(), ref)
+
     def drift(self, **filters: Any) -> Document:
         return drift.drift(self._session(), **filters)
 
@@ -131,8 +176,23 @@ class QueryService:
                 subject=values.get("subject"),
                 value=values.get("value"),
             ),
-            "lookup": lambda: self.lookup(
-                str(values.get("entity_id", "")), kind=values.get("kind")
+            "lookup": lambda: self.lookup_or_search(
+                values.get("entity_id"),
+                kind=values.get("kind"),
+                query=values.get("query"),
+                limit=values.get("limit"),
+            ),
+            "search": lambda: self.search(
+                str(values.get("query") or ""),
+                kind=values.get("kind"),
+                limit=values.get("limit"),
+            ),
+            "credential_for": lambda: self.credential_for(
+                str(values.get("service") or ""), values.get("action")
+            ),
+            "dns_chain": lambda: self.dns_chain(str(values.get("hostname") or "")),
+            "secret_describe": lambda: self.secret_describe(
+                str(values.get("ref") or "")
             ),
             "drift": lambda: self.drift(
                 **{

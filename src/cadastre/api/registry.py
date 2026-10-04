@@ -29,6 +29,55 @@ _JSON_TO_PYTHON: dict[str, type] = {
 }
 
 
+#: What each argument means, published in every tool schema. A required field
+#: an agent cannot read the purpose of is a required field it will guess at —
+#: 27 of 27 logged `lookup` failures passed a phrase where an id was required.
+ARGUMENT_DESCRIPTIONS: dict[str, str] = {
+    "intent": "Plain-language operational intent, e.g. 'deploy a public web "
+    "service with a gpu'.",
+    "artifact": "The artifact text (Streamable HTTP) or a local file path "
+    "(stdio), e.g. a compose file.",
+    "path": "Display name for the artifact, used in findings.",
+    "entity_id": "An exact entity id, e.g. 'node-b'. Use `query` instead "
+    "when you only have words.",
+    "query": "Free text over ids, names, addresses and secret references, "
+    "e.g. 'komodo api key'. Returns ranked candidates.",
+    "service": "A service name, e.g. 'komodo'.",
+    "action": "What you want to do with the service, e.g. 'deploy', 'read', "
+    "'ssh', 'push'. Optional; ranks candidates.",
+    "hostname": "A fully qualified hostname, e.g. 'app.example.com'.",
+    "ref": "A secret reference (scheme://project/env/KEY), a catalog id, or "
+    "a bare key name.",
+    "question_id": "One of the documented migration question ids.",
+}
+
+#: A ready call per operation, quoted in the error a malformed call receives.
+OPERATION_EXAMPLES: dict[str, str] = {
+    "context_for": '{"intent": "deploy a public web service"}',
+    "check": '{"artifact": "<compose file text>", "kind": "compose"}',
+    "lookup": '{"query": "komodo api key"} or {"entity_id": "node-b"}',
+    "credential_for": '{"service": "komodo", "action": "deploy"}',
+    "dns_chain": '{"hostname": "app.example.com"}',
+    "secret_describe": '{"ref": "infisical://apps/prod/API_KEY"}',
+    "question": '{"question_id": "<id>", "subject": "<entity>"}',
+}
+
+#: Argument names callers commonly send by mistake, and what they meant.
+ARGUMENT_ALIASES: dict[tuple[str, str], str] = {
+    ("context_for", "query"): "intent",
+    ("context_for", "text"): "intent",
+    ("lookup", "id"): "entity_id",
+    ("lookup", "name"): "query",
+    ("lookup", "q"): "query",
+    ("credential_for", "name"): "service",
+    ("dns_chain", "name"): "hostname",
+    ("dns_chain", "host"): "hostname",
+    ("secret_describe", "name"): "ref",
+    ("secret_describe", "secret"): "ref",
+    ("check", "content"): "artifact",
+}
+
+
 def argument_type(name: str) -> type:
     """The Python type an argument's JSON type maps to."""
     return _JSON_TO_PYTHON[ARGUMENT_TYPES.get(name, "string")]
@@ -60,6 +109,8 @@ class Operation:
         properties: dict[str, Any] = {}
         for name in self.arguments:
             schema: dict[str, Any] = {"type": ARGUMENT_TYPES.get(name, "string")}
+            if name in ARGUMENT_DESCRIPTIONS:
+                schema["description"] = ARGUMENT_DESCRIPTIONS[name]
             if name in enums:
                 schema["enum"] = list(enums[name])
             if name not in required:
@@ -115,11 +166,34 @@ MCP_OPERATIONS: tuple[Operation, ...] = (
         required_arguments=("artifact",),
         argument_enums=(("kind", artifact_kinds()),),
     ),
+    # `entity_id` or `query`, at least one — enforced by the use case, which
+    # names both in its error. Neither is schema-required, so a caller with
+    # only words is not forced to invent an id (WI-848).
     Operation(
         "lookup",
         "catalog.read",
-        arguments=("entity_id", "kind"),
-        required_arguments=("entity_id",),
+        arguments=("entity_id", "kind", "query", "limit"),
+        required_arguments=(),
+    ),
+    Operation(
+        "credential_for",
+        "catalog.read",
+        arguments=("service", "action"),
+        required_arguments=("service",),
+    ),
+    Operation(
+        "dns_chain",
+        "catalog.read",
+        arguments=("hostname",),
+        required_arguments=("hostname",),
+    ),
+    # Metadata only. The value never reaches the query layer: the secrets
+    # collector reduced it to counts in its own process.
+    Operation(
+        "secret_describe",
+        "catalog.read",
+        arguments=("ref",),
+        required_arguments=("ref",),
     ),
     Operation(
         "drift",
@@ -263,6 +337,34 @@ HTTP_ROUTES: tuple[Operation, ...] = (
         route="/lookup/{id}",
         request_fields=("id", "kind"),
         required_request_fields=("id",),
+    ),
+    Operation(
+        "search",
+        "catalog.read",
+        route="/search",
+        request_fields=("query", "kind", "limit"),
+        required_request_fields=("query",),
+    ),
+    Operation(
+        "credential_for",
+        "catalog.read",
+        route="/credential-for",
+        request_fields=("service", "action"),
+        required_request_fields=("service",),
+    ),
+    Operation(
+        "dns_chain",
+        "catalog.read",
+        route="/dns-chain",
+        request_fields=("hostname",),
+        required_request_fields=("hostname",),
+    ),
+    Operation(
+        "secret_describe",
+        "catalog.read",
+        route="/secret-describe",
+        request_fields=("ref",),
+        required_request_fields=("ref",),
     ),
     Operation("drift", "catalog.read", route="/drift"),
     Operation(

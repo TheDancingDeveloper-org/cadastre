@@ -9,6 +9,42 @@ The version recorded here is `application_version` in
 `src/cadastre/release-compatibility.json`, which is attested to every released
 image as the schema-compatibility predicate.
 
+## Unreleased
+
+### Added
+
+- **`lookup(query=...)` — find by words.** Every one of 27 logged `lookup`
+  failures was a caller passing a phrase where an exact `entity_id` was
+  required. `lookup` now takes `entity_id` *or* `query`; a query ranks
+  declared and observed entities and secrets by token overlap (CLI `cadastre
+  search`, HTTP `GET /search`). Secret hits carry store, project id and slug,
+  environment, path, server, and a ready agent-auth manifest line
+  (`VAR PROJECT_ID SECRET_NAME`). (WI-848)
+- **`credential_for(service, action)`.** Ranked secrets for acting on a
+  service, from name matches and declared `consumes_secret`, with action hints
+  (`deploy`, `ssh`, `push`, ...) and retired/revoked names ranked last. CLI
+  `cadastre credential-for`, HTTP `GET /credential-for`. (WI-848)
+- **`dns_chain(hostname)`.** Record -> ingress edge -> node -> service from
+  collected evidence, flagging e.g. a proxied hostname that points at a
+  workload node instead of the ingress edge fronting it (the 2026-08-26
+  outage). Catalog-only; never resolves live. CLI `cadastre dns-chain`, HTTP
+  `GET /dns-chain`. (WI-848)
+- **`secret_describe(ref)`.** A secret's project slug and id, environment,
+  path, server, version, timestamps, consumers, and value *shape* (length,
+  newline/CR counts, JSON parse) — never the value. The `secrets-infisical`
+  collector now computes the shape in its own process and emits it in an
+  `x-secret-store` block; `orchestrator-gitops` records interpolated variable
+  names (`x-orchestrator.variable_refs`) so consumers can be named. CLI
+  `cadastre secret-describe`, HTTP `GET /secret-describe`. (WI-864)
+
+### Changed
+
+- **MCP tool schemas say what each argument is for.** Every argument carries
+  a description, and a malformed call is answered with the required and
+  accepted arguments, a "did you mean" for common misnamings, and an example
+  call. Streamable HTTP now enforces `context_for`'s `intent` as required —
+  previously a missing `intent` reached the use case as an empty string.
+
 ## v0.2.4
 
 ### Added

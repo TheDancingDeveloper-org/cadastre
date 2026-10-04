@@ -14,8 +14,9 @@ from cadastre.application.context import ApplicationContext
 from cadastre.application.queries import QueryService
 from cadastre.core.errors import CadastreError
 from cadastre.mcp.drift import drift
+from cadastre.mcp.estate import ESTATE_TOOLS, lookup
 from cadastre.mcp.observations import observations
-from cadastre.mcp.sdk import ArtifactKind, error_kind, register
+from cadastre.mcp.sdk import ArtifactKind, ArtifactPath, Intent, error_kind, register
 from cadastre.mcp.writes import WRITE_TOOLS, write_mode_enabled
 from cadastre.render import json_out
 
@@ -107,9 +108,10 @@ def brief() -> str:
     )
 
 
-def context_for(intent: str) -> str:
+def context_for(intent: Intent) -> str:
     """Return placement context, candidates, constraints, exclusions, and
-    provenance for an operational intent."""
+    provenance for an operational intent. Required: `intent`, plain words,
+    e.g. context_for(intent="deploy a public web service")."""
     return _answer(
         lambda endpoint, token: client.request(
             endpoint, "/context-for", query={"intent": intent}, token=token
@@ -118,9 +120,10 @@ def context_for(intent: str) -> str:
     )
 
 
-def check(artifact: str, kind: ArtifactKind | None = None) -> str:
+def check(artifact: ArtifactPath, kind: ArtifactKind | None = None) -> str:
     """Check an artifact before commit and report actionable policy and
-    placement findings."""
+    placement findings. Required: `artifact`; `kind` is inferred from the
+    file name when omitted, e.g. check(artifact="compose.yaml")."""
     return _answer(
         lambda endpoint, token: _remote_check(endpoint, artifact, kind, token),
         lambda: _checks().artifact(
@@ -128,17 +131,6 @@ def check(artifact: str, kind: ArtifactKind | None = None) -> str:
             kind=kind,
             display_path=str(Path(artifact).expanduser()),
         ),
-    )
-
-
-def lookup(entity_id: str, kind: str | None = None) -> str:
-    """Look up one entity and its related estate connections, provenance, and
-    trust state."""
-    return _answer(
-        lambda endpoint, token: client.request(
-            endpoint, f"/lookup/{entity_id}", query={"kind": kind}, token=token
-        ),
-        lambda: _queries().lookup(entity_id, kind=kind),
     )
 
 
@@ -163,7 +155,8 @@ def version() -> str:
     )
 
 
-TOOLS = (brief, version, context_for, check, lookup, drift, question, observations)
+_BASE = (brief, version, context_for, check, lookup, drift, question, observations)
+TOOLS = _BASE + ESTATE_TOOLS
 
 
 def build_server() -> Any:

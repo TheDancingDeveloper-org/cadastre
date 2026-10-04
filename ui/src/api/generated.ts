@@ -2,6 +2,6 @@
 export type Provenance = { source: string; as_of: string | null; stale?: boolean; trust?: string };
 export type Document = { command: string; result: unknown; provenance?: Provenance[]; stale?: string[]; [key: string]: unknown };
 export type ApiError = { error: { kind: string; message: string } };
-export type ApiRoute = "/accept" | "/acknowledge" | "/add" | "/annotate" | "/brief" | "/check" | "/context-for" | "/delete" | "/drift" | "/health/live" | "/health/ready" | "/leave-contested" | "/lookup/{id}" | "/manifest/backlog" | "/manifest/brief" | "/manifest/drift" | "/manifest/next" | "/manifest/projects" | "/manifest/repo/{repo}" | "/manifest/why/{id}" | "/observations" | "/plugins" | "/question" | "/schema" | "/security-check" | "/sources" | "/stale" | "/update" | "/version";
+export type ApiRoute = "/accept" | "/acknowledge" | "/add" | "/annotate" | "/brief" | "/check" | "/context-for" | "/credential-for" | "/delete" | "/dns-chain" | "/drift" | "/health/live" | "/health/ready" | "/leave-contested" | "/lookup/{id}" | "/manifest/backlog" | "/manifest/brief" | "/manifest/drift" | "/manifest/next" | "/manifest/projects" | "/manifest/repo/{repo}" | "/manifest/why/{id}" | "/observations" | "/plugins" | "/question" | "/schema" | "/search" | "/secret-describe" | "/security-check" | "/sources" | "/stale" | "/update" | "/version";
 export type HttpMethod = "GET" | "POST";
 export type OpenApiDocument = { openapi: string; paths: Record<ApiRoute, unknown> };

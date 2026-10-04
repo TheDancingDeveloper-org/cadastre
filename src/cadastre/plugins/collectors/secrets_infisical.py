@@ -7,6 +7,14 @@ local dev" (AGENTS.md, the lines that do not move).
 
 What it delivers is the other half of the secret-name diff: references present
 in the secret manager versus references present in the CI secret store.
+
+It also delivers, per secret, an `x-secret-store` block: where the secret lives
+(project id and slug, environment, path, server) and the *shape* of its value
+(length, newline/CR counts, whether it parses as JSON — `core.secretshape`).
+The shape is computed here, in the collector process, from the value the list
+call already returns, and the value is dropped in the same expression. The
+query layer never sees a value (DESIGN §8: "Secret values never transit the
+query layer"); `secret_describe` reads this block.
 """
 
 from __future__ import annotations
@@ -16,6 +24,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from cadastre.core.provenance import format_timestamp
+from cadastre.core.secretshape import describe_value
 from cadastre.plugins.collectors import serve_collector
 from cadastre.plugins.collectors.http import Endpoint, HttpError, get_json
 from cadastre.plugins.protocol import Reply, Request, ok
@@ -40,8 +49,72 @@ _VALUE_KEYS = frozenset(
 )
 
 
+def _location(options: dict[str, Any]) -> dict[str, Any]:
+    """Where this source's secrets live: the facts a consumer needs to fetch one.
+
+    The project id is the store's own identifier — the thing an API call or an
+    agent-auth manifest line needs, and the thing a bare `store://project/...`
+    reference does not carry.
+    """
+    location: dict[str, Any] = {}
+    for key, option in (
+        ("project_id", "workspace_id"),
+        ("project_slug", "project_slug"),
+        ("server", "endpoint"),
+    ):
+        value = options.get(option)
+        if isinstance(value, str) and value:
+            location[key] = value.rstrip("/") if key == "server" else value
+    return location
+
+
+def _store_block(
+    item: dict[str, Any],
+    key: str,
+    path: str,
+    environment: str,
+    location: dict[str, Any],
+) -> dict[str, Any]:
+    block: dict[str, Any] = {
+        **location,
+        "environment": environment,
+        "path": path,
+        "key": key,
+    }
+    version = item.get("version")
+    if isinstance(version, int) and not isinstance(version, bool):
+        block["version"] = version
+    for field, names in (
+        ("updated_at", ("updatedAt", "updated_at")),
+        ("created_at", ("createdAt", "created_at")),
+    ):
+        stamp = next(
+            (item[name] for name in names if isinstance(item.get(name), str)), None
+        )
+        if stamp:
+            block[field] = stamp
+    raw = next(
+        (
+            item[name]
+            for name in ("secretValue", "secret_value", "value")
+            if name in item
+        ),
+        None,
+    )
+    # The value is read once, reduced to counts, and never bound to anything
+    # that outlives this expression.
+    if isinstance(raw, str):
+        block["shape"] = describe_value(raw)
+    return block
+
+
 def transform(payload: Any, options: dict[str, Any]) -> dict[str, Any]:
-    """API response -> secret entities. Names, paths, rotation dates. No values."""
+    """API response -> secret entities. Names, paths, rotation dates, shapes.
+
+    No values: a value is reduced to `core.secretshape` counts inside
+    `_store_block` and never copied.
+    """
+    location = _location(options)
     store = str(options.get("store") or "secrets-manager")
     environment = str(options.get("environment") or "prod")
     # The estate decides what a secret reference looks like, not this collector.
@@ -63,6 +136,7 @@ def transform(payload: Any, options: dict[str, Any]) -> dict[str, Any]:
             "id": f"{store}-{key.lower()}".replace("_", "-"),
             "ref": prefix + ref.lstrip("/"),
             "store": store,
+            "x-secret-store": _store_block(item, key, path, environment, location),
         }
         updated = item.get("updatedAt") or item.get("updated_at")
         if isinstance(updated, str) and updated:
@@ -96,6 +170,18 @@ def _assert_no_values(payload: Any) -> None:
             _assert_no_values(item)
 
 
+def _project_slug(endpoint: Endpoint, workspace: str) -> str | None:
+    """Best effort: the project's human slug. A token scoped to secrets only may
+    not read project metadata, and that must not fail the collection."""
+    try:
+        payload = get_json(endpoint, f"/api/v1/workspace/{workspace}")
+    except HttpError:
+        return None
+    project = payload.get("workspace") if isinstance(payload, dict) else None
+    slug = project.get("slug") if isinstance(project, dict) else None
+    return slug if isinstance(slug, str) and slug else None
+
+
 def _collect(request: Request) -> Reply:
     endpoint = Endpoint.from_config(request.config)
     workspace = request.config.get("workspace_id")
@@ -110,7 +196,12 @@ def _collect(request: Request) -> Reply:
             "secretPath": request.config.get("path", "/"),
         },
     )
-    result = transform(payload, request.config)
+    config = dict(request.config)
+    if workspace and not config.get("project_slug"):
+        slug = _project_slug(endpoint, str(workspace))
+        if slug:
+            config["project_slug"] = slug
+    result = transform(payload, config)
     _assert_no_values(result)
     return ok(result, format_timestamp(datetime.now(tz=UTC)))
 
