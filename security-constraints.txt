@@ -10,4 +10,4 @@
 # setuptools ships in python:3.14-slim-bookworm.       CVE-2025-47273
 setuptools>=84.0.0
 # msgpack arrives transitively through `mcp`.          GHSA-6v7p-g79w-8964
-msgpack>=1.2.1
+msgpack>=1.2.2
