@@ -28,10 +28,12 @@ from cadastre.adapters.security import (
     certificate_common_name,
 )
 from cadastre.api.registry import (
+    ARGUMENT_ALIASES,
     ARGUMENT_TYPES,
     MANIFEST_MCP_OPERATIONS,
     MCP_OPERATIONS,
     MCP_WRITE_OPERATIONS,
+    OPERATION_EXAMPLES,
     argument_type,
 )
 from cadastre.application.checks import CheckService
@@ -416,15 +418,19 @@ class _Handler(BaseHTTPRequestHandler):
         )
         unexpected = sorted(set(arguments) - set(operation.arguments))
         if unexpected:
-            raise UsageError(f"{name} does not accept argument {unexpected[0]!r}")
+            raise UsageError(
+                f"{name} does not accept argument {unexpected[0]!r}"
+                + _usage_hint(name, operation, unexpected[0])
+            )
         required = operation.required_argument_names()
         missing = [
-            key
-            for key in (operation.required_arguments or ())
-            if key not in arguments or arguments[key] is None
+            key for key in required if key not in arguments or arguments[key] is None
         ]
         if missing:
-            raise UsageError(f"{name} needs argument {missing[0]!r}")
+            raise UsageError(
+                f"{name} needs argument {missing[0]!r}"
+                + _usage_hint(name, operation, None)
+            )
         for key, value in arguments.items():
             if value is None and key not in required:
                 # The schema publishes optional arguments as nullable with a
@@ -440,6 +446,25 @@ class _Handler(BaseHTTPRequestHandler):
                     f"{name} argument {key!r} must be a "
                     f"{ARGUMENT_TYPES.get(key, 'string')}"
                 )
+
+
+def _usage_hint(name: str, operation: Any, wrong: str | None) -> str:
+    """The rest of a malformed-call error: what was meant, what is accepted.
+
+    An error that only says "no" is answered by a second guess. This one says
+    which argument was probably meant, lists the required and accepted
+    arguments, and quotes a call that works.
+    """
+    parts: list[str] = []
+    meant = ARGUMENT_ALIASES.get((name, wrong)) if wrong else None
+    if meant:
+        parts.append(f"did you mean {meant!r}?")
+    required = operation.required_argument_names()
+    parts.append("required: " + (", ".join(required) if required else "(none)"))
+    parts.append("accepted: " + (", ".join(operation.arguments) or "(none)"))
+    if name in OPERATION_EXAMPLES:
+        parts.append(f"example: {OPERATION_EXAMPLES[name]}")
+    return "; " + "; ".join(parts)
 
 
 class MCPHTTPServer(ThreadingHTTPServer):

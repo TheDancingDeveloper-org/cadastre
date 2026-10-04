@@ -33,6 +33,7 @@ config:
 
 from __future__ import annotations
 
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -55,6 +56,27 @@ COMPOSE_NAMES = (
     "docker-compose.yaml",
     "docker-compose.yml",
 )
+
+
+#: `${NAME}`, `${NAME:-default}`, `$NAME` (compose interpolation) and
+#: `[[NAME]]` (an orchestrator-side secret interpolation). Names only: the
+#: matched text is a variable name, never a value, and a literal value in a
+#: compose file is not read by this.
+_VARIABLE_REF = re.compile(
+    r"\$\{([A-Za-z_][A-Za-z0-9_]*)|\$([A-Za-z_][A-Za-z0-9_]*)|\[\[([A-Za-z0-9_]+)\]\]"
+)
+
+
+def _variable_refs(node: Any, found: set[str]) -> None:
+    if isinstance(node, str):
+        for match in _VARIABLE_REF.finditer(node):
+            found.add(next(group for group in match.groups() if group))
+    elif isinstance(node, dict):
+        for value in node.values():
+            _variable_refs(value, found)
+    elif isinstance(node, list):
+        for item in node:
+            _variable_refs(item, found)
 
 
 def transform_stack(
@@ -95,6 +117,13 @@ def transform_stack(
         return None
     stack_host = top.get("host") or host
     orchestrator: dict[str, Any] = {"compose_services": compose_services}
+    # Which variables the stack interpolates — the names a secret store's
+    # entries are injected under. This is what lets `secret_describe` name a
+    # secret's consumers instead of leaving that to a grep across the ops repo.
+    references: set[str] = set()
+    _variable_refs(services, references)
+    if references:
+        orchestrator["variable_refs"] = sorted(references)
     entity: dict[str, Any] = {"id": stack, "x-orchestrator": orchestrator}
     if stack_host:
         entity["runs_on"] = str(stack_host)

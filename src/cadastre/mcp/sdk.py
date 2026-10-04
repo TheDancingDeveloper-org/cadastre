@@ -9,6 +9,7 @@ from typing import Annotated, Any
 
 from pydantic import Field
 
+from cadastre.api.registry import ARGUMENT_DESCRIPTIONS as _DESCRIPTIONS
 from cadastre.core.artifacts import artifact_kinds
 from cadastre.core.errors import (
     AmbiguousEntityError,
@@ -22,6 +23,18 @@ from cadastre.core.errors import (
 # having to discover it by sending a wrong value and reading the error. Built
 # from the parser registry, so a new parser cannot skip the schema.
 ArtifactKind = Annotated[str, Field(json_schema_extra={"enum": list(artifact_kinds())})]
+
+# Described arguments. The SDK renders the description into the published
+# schema, so a client reads what a field is for before it calls — the same
+# text the Streamable HTTP schema publishes (api.registry).
+Intent = Annotated[str, Field(description=_DESCRIPTIONS["intent"])]
+ArtifactPath = Annotated[str, Field(description=_DESCRIPTIONS["artifact"])]
+EntityId = Annotated[str | None, Field(description=_DESCRIPTIONS["entity_id"])]
+Query = Annotated[str | None, Field(description=_DESCRIPTIONS["query"])]
+ServiceName = Annotated[str, Field(description=_DESCRIPTIONS["service"])]
+Action = Annotated[str | None, Field(description=_DESCRIPTIONS["action"])]
+Hostname = Annotated[str, Field(description=_DESCRIPTIONS["hostname"])]
+SecretRef = Annotated[str, Field(description=_DESCRIPTIONS["ref"])]
 
 
 def error_kind(exc: Exception) -> str:

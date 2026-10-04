@@ -111,6 +111,9 @@ HTTP_ONLY_ROUTES = {
     "sources",
     "security-check",
     "schema",
+    # Served over MCP as `lookup(query=...)`, which dispatches to the same
+    # use case; a separate MCP tool would be a second name for one answer.
+    "search",
 }
 
 

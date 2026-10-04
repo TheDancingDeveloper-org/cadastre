@@ -1245,7 +1245,7 @@ def test_secret_refs_are_built_from_path_and_key() -> None:
     result = secrets_infisical.transform(INFISICAL, {"environment": "prod"})
     refs = {s["ref"] for s in result["entities"]["secret"]}
     assert refs == {"/prod/notes-api/db-password", "/prod/ingress/acme-token"}
-    _parses(result)
+    _parses(result, extensions={"secret": {"x-secret-store"}})
 
 
 def test_a_value_reaching_the_output_is_refused_loudly() -> None:

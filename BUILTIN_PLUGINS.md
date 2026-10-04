@@ -317,9 +317,20 @@ secret mutation are intentionally absent.
 rotation date and `extra.secret_names`; a value-shaped payload is refused.
 Config: `endpoint`, `token_env` (minimum read-only workspace-secret metadata),
 `workspace_id` (required), `environment` (default `prod`), `path` (default
-`/`), `store` (default `secrets-manager`), and `ref_prefix` (default `/`). It
-has no mutation path and deliberately does not report values, ciphertext, or
-secret permissions.
+`/`), `store` (default `secrets-manager`), `ref_prefix` (default `/`), and
+`project_slug` (optional; otherwise read best-effort from
+`/api/v1/workspace/{id}`, and omitted if the token cannot see project
+metadata). It has no mutation path and deliberately does not report values,
+ciphertext, or secret permissions.
+
+Each secret also carries an `x-secret-store` attribute block: `project_id`,
+`project_slug`, `server`, `environment`, `path`, `key`, `version`,
+`updated_at`, `created_at`, and `shape` — the value's length, byte count,
+line/newline/carriage-return/tab/control-character counts, whitespace and
+non-ASCII flags, and whether it parses as JSON (`core.secretshape`). The shape
+is computed in the collector process from the value the list call already
+returns, and the value is dropped in the same step; no hash is kept. This is
+what `secret_describe` and the secret hits of `lookup(query=...)` read.
 
 ```yaml
 - id: secrets
@@ -338,7 +349,10 @@ name) — matching the catalog's own altitude, since compose-service-level
 emission produced compose-service-name noise the declared catalog was never
 curated to converge with. Each compose file's own service/container
 inventory (name, host, exposure, repository) is retained in full under the
-`x-orchestrator.compose_services` attribute. Config: `path` (required
+`x-orchestrator.compose_services` attribute, and the variable names the
+stack interpolates (`${NAME}`, `$NAME`, `[[NAME]]`; names only, never literal
+values) under `x-orchestrator.variable_refs`, which `secret_describe` reads to
+list a secret's consumers. Config: `path` (required
 readable checkout), `host_from` (`directory` only when directory names
 really are hosts), and `repo`. It needs filesystem read access, no
 environment variable or network access, and never runs an orchestrator. It

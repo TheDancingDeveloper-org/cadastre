@@ -64,10 +64,72 @@ runtime stores.
 | `context-for <intent>` | Return relevant candidates, exclusions, conventions, and conflicts. |
 | `check <artifact>` | Check a proposed Compose, ingress, pipeline, or grants file. |
 | `lookup <id>` | Show one entity and its relationships. |
+| `search <words>` | Rank declared and observed entities and secrets by words (MCP: `lookup(query=...)`). |
+| `credential-for <service> [action]` | Rank the secret(s) needed to act on a service, with project id and a manifest line. |
+| `dns-chain <hostname>` | Check record -> ingress edge -> node -> service from collected evidence. |
+| `secret-describe <ref>` | A secret's location, value shape, version, and consumers — never its value. |
 | `question <id>` | Answer one explicit operational migration question. |
 | `drift` | Show where declarations and observations disagree. |
 | `observations` | Show retained collector evidence that has no entity form. |
 | `stale` | Show stale, unverified, and contested information. |
+
+### Finding things by words
+
+An id is not what an agent usually has. `lookup` over MCP takes either an
+exact `entity_id` or free-text `query`; with `query` it returns ranked
+candidates across declared and observed entities, merging a declared secret
+with the collector's observation of the same reference:
+
+```text
+MCP:  lookup(query="komodo api key")
+      credential_for(service="komodo", action="deploy")
+      dns_chain(hostname="app.example.com")
+      secret_describe(ref="HOMELAB_KOMODO_API_KEY")
+API:  GET /search?query=komodo+api+key
+      GET /credential-for?service=komodo&action=deploy
+      GET /dns-chain?hostname=app.example.com
+      GET /secret-describe?ref=HOMELAB_KOMODO_API_KEY
+```
+
+Every secret hit carries `store`, `project_id`, `project_slug`,
+`environment`, `path`, `server`, and a ready agent-auth manifest line
+(`VAR PROJECT_ID SECRET_NAME [flags]`, flags from `optional`, `ondemand`,
+`writable`). The project id comes from the secrets collector's
+`x-secret-store` evidence, falling back to the source's `workspace_id` when
+the configuration is visible to the serving process. Results are ranked
+candidates, not an identification: confirm project and environment before
+using one.
+
+`secret_describe` adds the value's *shape* — length, bytes, line count,
+newline and carriage-return counts, control characters, leading/trailing
+whitespace, whether it parses as JSON and as what — plus version,
+`updated_at`, `created_at`, last rotation, and consumers (declared
+`consumes_secret`, and observed stacks whose compose files interpolate the
+secret's name). The shape is computed by the secrets collector inside its own
+process from the value its list call already returns; the value itself is
+dropped there and never reaches the catalog, the query layer, or an answer. A
+secret with raw newlines is reported with a plain-language problem ("a .env
+line or KEY=VALUE manifest will truncate or split it"). The shape is as fresh
+as the last `collect`.
+
+`dns_chain` follows A/AAAA/CNAME records (including a covering wildcard) from
+the DNS collector and declarations, maps each address to the host that owns
+it (endpoint addresses, host `x-*.addresses` evidence such as
+`x-tailscale`), and compares that with what the hostname should reach: the
+endpoint that publishes it, the ingress it is `fronted_by`, and the node its
+service runs on. Findings include `points_at_workload` ("proxied hostname X
+points at workload node N instead of the ingress edge"), `wrong_ingress`,
+`points_elsewhere`, `upstream_mismatch`, `unknown_address`, `no_record` and
+`declared_observed_differ`; the verdict is `ok`, `unverified`, or `mismatch`
+(CLI exit 1). It is catalog-only: nothing is resolved live, so a LAN
+split-horizon or wildcard zone is outside what it can see — compare a public
+resolver with the LAN resolver when that matters. An ingress is any service
+some endpoint is `fronted_by`, or one tagged `ingress`, `edge` or
+`reverse-proxy`; an edge host runs one, or has role or tag `edge`.
+
+Malformed MCP calls are answered with the required and accepted arguments, a
+"did you mean" for common misnamings (`context_for(query=...)` -> `intent`),
+and a working example call.
 
 ### Changing the map
 

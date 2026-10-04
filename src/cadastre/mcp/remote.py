@@ -11,6 +11,16 @@ from typing import Any
 from cadastre import __version__
 from cadastre.adapters import client
 from cadastre.core.errors import CadastreError
+from cadastre.mcp.sdk import (
+    Action,
+    ArtifactPath,
+    EntityId,
+    Hostname,
+    Intent,
+    Query,
+    SecretRef,
+    ServiceName,
+)
 
 MCP_URL_ENV = "CADASTRE_MCP_URL"
 
@@ -97,10 +107,10 @@ def build_server() -> Any:
     def version() -> str:
         return _remote_tool("version", {})
 
-    def context_for(intent: str) -> str:
+    def context_for(intent: Intent) -> str:
         return _remote_tool("context_for", {"intent": intent})
 
-    def check(artifact: str, kind: str | None = None) -> str:
+    def check(artifact: ArtifactPath, kind: str | None = None) -> str:
         try:
             content = Path(artifact).expanduser().read_text(encoding="utf-8")
         except OSError as exc:
@@ -112,8 +122,34 @@ def build_server() -> Any:
             {"artifact": content, "kind": kind, "path": Path(artifact).name},
         )
 
-    def lookup(entity_id: str, kind: str | None = None) -> str:
-        return _remote_tool("lookup", {"entity_id": entity_id, "kind": kind})
+    def lookup(
+        entity_id: EntityId = None,
+        kind: str | None = None,
+        query: Query = None,
+        limit: int | None = None,
+    ) -> str:
+        # Only what was given: a server older than `query` still answers an
+        # id lookup, instead of refusing an argument it never heard of.
+        arguments = {
+            key: value
+            for key, value in (
+                ("entity_id", entity_id),
+                ("kind", kind),
+                ("query", query),
+                ("limit", limit),
+            )
+            if value is not None
+        }
+        return _remote_tool("lookup", arguments)
+
+    def credential_for(service: ServiceName, action: Action = None) -> str:
+        return _remote_tool("credential_for", {"service": service, "action": action})
+
+    def dns_chain(hostname: Hostname) -> str:
+        return _remote_tool("dns_chain", {"hostname": hostname})
+
+    def secret_describe(ref: SecretRef) -> str:
+        return _remote_tool("secret_describe", {"ref": ref})
 
     def drift(
         category: str | None = None,
@@ -242,6 +278,9 @@ def build_server() -> Any:
         context_for,
         check,
         lookup,
+        credential_for,
+        dns_chain,
+        secret_describe,
         drift,
         question,
         observations,

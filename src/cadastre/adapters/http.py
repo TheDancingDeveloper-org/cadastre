@@ -439,6 +439,26 @@ class _Handler(BaseHTTPRequestHandler):
                         kind=query.get("kind", [None])[0],
                     )
                 )
+            elif path == "/search":
+                search_limit = query.get("limit", [None])[0]
+                self._call(
+                    service.search(
+                        query.get("query", query.get("q", [""]))[0],
+                        kind=query.get("kind", [None])[0],
+                        limit=int(search_limit) if search_limit else None,
+                    )
+                )
+            elif path == "/credential-for":
+                self._call(
+                    service.credential_for(
+                        query.get("service", [""])[0],
+                        query.get("action", [None])[0],
+                    )
+                )
+            elif path == "/dns-chain":
+                self._call(service.dns_chain(query.get("hostname", [""])[0]))
+            elif path == "/secret-describe":
+                self._call(service.secret_describe(query.get("ref", [""])[0]))
             elif path == "/drift":
                 self._call(service.drift())
             elif path == "/observations":

@@ -109,6 +109,27 @@ def build_parser(*, include_manifest: bool = False) -> argparse.ArgumentParser:
     lookup.add_argument("id")
     lookup.add_argument("--kind", default=None, help="Disambiguate a shared id.")
 
+    search = sub_parser("search", "Find entities and secrets by words.")
+    search.add_argument("query", help='e.g. "komodo api key"')
+    search.add_argument("--kind", default=None, help="Only this entity kind.")
+    search.add_argument("--limit", type=int, default=None)
+
+    credential = sub_parser(
+        "credential-for", "Which secret(s) acting on a service needs."
+    )
+    credential.add_argument("service", help='e.g. "komodo"')
+    credential.add_argument("action", nargs="?", default=None, help='e.g. "deploy"')
+
+    chain = sub_parser(
+        "dns-chain", "Check record -> ingress edge -> node -> service for a name."
+    )
+    chain.add_argument("hostname", help='e.g. "app.example.com"')
+
+    describe = sub_parser(
+        "secret-describe", "A secret's location and value shape, never its value."
+    )
+    describe.add_argument("ref", help="Reference, catalog id, or bare key name.")
+
     context = sub_parser(
         "context-for", "The truth relevant to one decision, pre-joined."
     )
@@ -646,6 +667,22 @@ def dispatch(args: argparse.Namespace) -> Document:
         return lookup.lookup(session, args.id, kind=args.kind)
     if args.command == "context-for":
         return context_for.context_for(session, args.intent)
+    if args.command in {"search", "credential-for"}:
+        from cadastre.cli import search as search_cmd
+
+        if args.command == "search":
+            return search_cmd.search(
+                session, args.query, kind=args.kind, limit=args.limit
+            )
+        return search_cmd.credential_for(session, args.service, args.action)
+    if args.command == "dns-chain":
+        from cadastre.cli import dns_chain as dns_chain_cmd
+
+        return dns_chain_cmd.dns_chain(session, args.hostname)
+    if args.command == "secret-describe":
+        from cadastre.cli import secret_describe as describe_cmd
+
+        return describe_cmd.secret_describe(session, args.ref)
     if args.command == "question":
         return question_cmd.question(
             session, args.id, subject=args.subject, value=args.value

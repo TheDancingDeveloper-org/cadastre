@@ -15,6 +15,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from cadastre.core import model
+from cadastre.core.secretshape import SHAPE_FIELDS
 from cadastre.core.serialize import entity_to_dict
 from cadastre.core.spec import ENTITY_SPECS
 
@@ -256,6 +257,38 @@ ATTRIBUTE_SCHEMAS: dict[tuple[str, str], dict[str, Any]] = {
         },
         "additionalProperties": True,
     },
+    # Where a secret lives and the shape of its value — never the value. The
+    # collector reduces the value to counts in-process (core.secretshape);
+    # `secret_describe` reads this block. Neutrally named so any secret-store
+    # collector can emit it.
+    ("secrets-infisical", "secret"): {
+        "type": "object",
+        "properties": {
+            "x-secret-store": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "project_slug": {"type": "string"},
+                    "server": {"type": "string"},
+                    "environment": {"type": "string"},
+                    "path": {"type": "string"},
+                    "key": {"type": "string"},
+                    "version": {"type": "integer"},
+                    "updated_at": {"type": "string"},
+                    "created_at": {"type": "string"},
+                    "shape": {
+                        "type": "object",
+                        "properties": {
+                            name: {"type": kind} for name, kind in SHAPE_FIELDS.items()
+                        },
+                        "additionalProperties": False,
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+        "additionalProperties": True,
+    },
     ("orchestrator-gitops", "service"): {
         "type": "object",
         "properties": {
@@ -281,6 +314,10 @@ ATTRIBUTE_SCHEMAS: dict[tuple[str, str], dict[str, Any]] = {
                     # read as agreement with whatever was declared, so the gap
                     # is stated here rather than left to silence.
                     "host_attribution": {"type": "string", "enum": ["unknown"]},
+                    # Variable names the stack interpolates (`${NAME}`,
+                    # `[[NAME]]`). Names only; read by `secret_describe` to
+                    # list a secret's consumers.
+                    "variable_refs": {"type": "array", "items": {"type": "string"}},
                     "host_attribution_reason": {"type": "string"},
                 },
                 "required": ["compose_services"],
