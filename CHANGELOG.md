@@ -9,7 +9,7 @@ The version recorded here is `application_version` in
 `src/cadastre/release-compatibility.json`, which is attested to every released
 image as the schema-compatibility predicate.
 
-## Unreleased
+## v0.2.5
 
 ### Added
 
