@@ -16,7 +16,7 @@ image as the schema-compatibility predicate.
 - **Host role `external`.** A third-party service endpoint we depend on
   (LLM/API vendor) without inventing a pseudo-host. Never a placement target:
   `context_for` lists it under exclusions with "third-party provider; not a
-  placement target". Because no collector can reflect it, `add`/`delete` are
+  placement target". Because no collector can reflect it, `add`/`update`/`delete` are
   allowed for an external host, services running on it, and their endpoints;
   every other source-authoritative refusal is unchanged. (WI-1257)
 - **`lookup tag:<tag>`.** Lists every declared entity carrying a tag, with
