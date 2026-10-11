@@ -63,7 +63,7 @@ runtime stores.
 | `brief` | Summarize the estate. Call it once at the start of a session. |
 | `context-for <intent>` | Return relevant candidates, exclusions, conventions, and conflicts. |
 | `check <artifact>` | Check a proposed Compose, ingress, pipeline, or grants file. |
-| `lookup <id>` | Show one entity and its relationships. |
+| `lookup <id>` | Show one entity and its relationships. `lookup tag:<tag>` lists declared entities carrying a tag. |
 | `search <words>` | Rank declared and observed entities and secrets by words (MCP: `lookup(query=...)`). |
 | `credential-for <service> [action]` | Rank the secret(s) needed to act on a service, with project id and a manifest line. |
 | `dns-chain <hostname>` | Check record -> ingress edge -> node -> service from collected evidence. |
@@ -127,6 +127,13 @@ resolver with the LAN resolver when that matters. An ingress is any service
 some endpoint is `fronted_by`, or one tagged `ingress`, `edge` or
 `reverse-proxy`; an edge host runs one, or has role or tag `edge`.
 
+`lookup tag:<tag>` (MCP `lookup(entity_id="tag:llm")`, HTTP
+`GET /lookup/tag:llm`) answers the capability question `context_for` does not:
+it lists every *declared* entity carrying that tag, with the field that
+locates it (`runs_on`, `ref`, `address`, `role`) and its notes quoted as data.
+`--kind` narrows it. An unused tag is an honest empty answer, not a missing
+entity. `brief` shows each service's tags for the same reason.
+
 Malformed MCP calls are answered with the required and accepted arguments, a
 "did you mean" for common misnamings (`context_for(query=...)` -> `intent`),
 and a working example call.
@@ -139,6 +146,31 @@ and a working example call.
 | `annotate` | Add catalog-owned facts to an observed entity. |
 | `accept`, `leave-contested` | Resolve a contest, or record that it stands. |
 | `acknowledge` | Defer a contest until a stated date, with a reason. |
+
+#### Declaring a third-party provider
+
+A vendor the estate calls but does not run (an LLM API, a SaaS endpoint) is a
+host with role `external`. No collector can ever reflect it, so it is
+catalog-authored: `add` and `delete` are allowed for the host, a service that
+runs on it, and that service's endpoints, while the same kinds on estate hosts
+stay refused. Placement always excludes it ("third-party provider; not a
+placement target"). The secret stays owned by the secret store; name its ref
+in the service notes and `lookup <SECRET_NAME>` resolves the observed entry.
+
+```text
+add host      {"id": "theclawbay", "role": "external",
+               "reachable_from": ["internet"], "tags": ["llm"]}
+add service   {"id": "theclawbay-api", "runs_on": "theclawbay",
+               "tags": ["llm", "openai-compatible"],
+               "notes": "Models ... Status ... Key infisical://apps/prod/NAME"}
+add endpoint  {"id": "theclawbay-https", "service": "theclawbay-api",
+               "network": "internet", "address": "api.theclawbay.com",
+               "port": 443, "protocol": "https"}
+```
+
+Leave the service's `expose` unset: exposure tiers describe what *we*
+publish. Capabilities live in tags and notes until a rule needs a field.
+Find them all with `lookup tag:llm`.
 
 ### Collecting and configuring
 

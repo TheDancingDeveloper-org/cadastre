@@ -30,6 +30,7 @@ from cadastre.core.errors import (
     AmbiguousEntityError,
     MissingEntityError,
     UnknownKindError,
+    UsageError,
 )
 from cadastre.core.observed import ObservedSource
 from cadastre.core.serialize import entity_to_dict
@@ -746,12 +747,100 @@ def _unresolved(session: Session, ident: str, *, kind: str | None) -> Document:
     )
 
 
+#: Selector prefix: `lookup tag:llm` lists declared entities carrying a tag.
+TAG_SELECTOR = "tag:"
+
+
+def _tag_detail(entity: model.Entity) -> str:
+    """The one field that says where a tagged entity is, per kind."""
+    for attr in ("runs_on", "ref", "address", "role", "class_"):
+        value = getattr(entity, attr, None)
+        if value:
+            return f"{attr.rstrip('_')}={value}"
+    return ""
+
+
+def _tag_document(session: Session, tag: str, *, kind: str | None) -> Document:
+    """Declared entities carrying a tag — the capability question's answer.
+
+    `context_for` is a placement query and reports capability words as
+    unrecognised by design; this is where "which services are tagged `llm`"
+    is answered instead. Declared only: a tag is a selector somebody wrote
+    down, and an observed entity's tags are the collector's, not a statement
+    of intent.
+    """
+    if not tag:
+        raise UsageError("tag selector needs a name, for example tag:llm")
+    hits = [
+        (entity_kind, entity)
+        for entity_kind in session.registry.kinds
+        if kind is None or entity_kind == kind
+        for entity in session.catalog.all(entity_kind)
+        if tag in entity.tags
+    ]
+    scope = f" {kind}" if kind else ""
+    if hits:
+        plural, verb = ("y", "carries") if len(hits) == 1 else ("ies", "carry")
+        blurb = (
+            f"{len(hits)} declared{scope} entit{plural} {verb} tag {tag!r}. "
+            "Look one up by its id to see it in full."
+        )
+    else:
+        blurb = (
+            f"Nothing declared{scope} carries tag {tag!r}. Tags are matched "
+            "exactly; if you expected a hit, the catalog is missing it — say so "
+            "rather than guessing an id."
+        )
+    section = Section(
+        f"tag {tag}",
+        (
+            Para(blurb),
+            Table(
+                ("kind", "id", "where", "tags", "notes"),
+                tuple(
+                    (
+                        entity_kind,
+                        entity.id,
+                        _tag_detail(entity),
+                        ", ".join(entity.tags),
+                        inert(entity.notes),
+                    )
+                    for entity_kind, entity in hits
+                ),
+            ),
+        ),
+        note="Tag match over declared entities. Notes are quoted data.",
+    )
+    return Document(
+        title=f"cadastre lookup {TAG_SELECTOR}{tag}",
+        sections=(section,),
+        provenance=session.provenance(),
+        data={
+            "kind": kind,
+            "resolution": "tag-match",
+            "declared": True,
+            "query": f"{TAG_SELECTOR}{tag}",
+            "tag": tag,
+            "matches": [
+                {
+                    "kind": entity_kind,
+                    "id": entity.id,
+                    "entity": entity_to_dict(entity, registry=session.registry),
+                }
+                for entity_kind, entity in hits
+            ],
+        },
+    )
+
+
 def lookup(session: Session, ident: str, *, kind: str | None = None) -> Document:
     if kind is not None and kind not in session.registry.kinds:
         raise UnknownKindError(
             f"unknown entity kind {kind!r}; expected one of: "
             + ", ".join(sorted(session.registry.kinds))
         )
+    if ident.startswith(TAG_SELECTOR):
+        return _tag_document(session, ident[len(TAG_SELECTOR) :], kind=kind)
     matches = session.catalog.find(ident)
     if kind:
         matches = [(k, e) for k, e in matches if k == kind]

@@ -30,16 +30,17 @@ ws-01    workstation     lab-net                                     0         w
 ## Services
 
 `AMBIGUOUS` means more than one pipeline claims the service and none is marked
-authoritative. Do not guess which one deploys.
+authoritative. Do not guess which one deploys. `cadastre lookup tag:<tag>` lists
+everything carrying a tag.
 
-service    host     expose    endpoints                            deployed by
----------  -------  --------  -----------------------------------  --------------------
-ci         app-01   internal  ci.internal.example.invalid:8000
-forge      app-01   internal  forge.internal.example.invalid:3000
-ingress    edge-01  public    edge.example.invalid:443             ops-repo-selfhosted
-notes-api  app-01   internal  notes.internal.example.invalid:8080  notes-api-selfhosted
-notes-db   data-01  none      db.internal.example.invalid:5432
-tagger     app-02   none                                           tagger-selfhosted
+service    host     expose    endpoints                            deployed by           tags
+---------  -------  --------  -----------------------------------  --------------------  -----------------------
+ci         app-01   internal  ci.internal.example.invalid:8000                           infrastructure
+forge      app-01   internal  forge.internal.example.invalid:3000                        infrastructure
+ingress    edge-01  public    edge.example.invalid:443             ops-repo-selfhosted   infrastructure, ingress
+notes-api  app-01   internal  notes.internal.example.invalid:8080  notes-api-selfhosted  app-tier
+notes-db   data-01  none      db.internal.example.invalid:5432                           persistent-data
+tagger     app-02   none                                           tagger-selfhosted     app-tier, gpu
 
 ## Repositories
 

@@ -89,18 +89,21 @@ def _services_section(session: Session) -> Section:
                 service.expose or "",
                 address,
                 deploys,
+                ", ".join(service.tags),
             )
         )
     return Section(
         "Services",
         (
             Table(
-                ("service", "host", "expose", "endpoints", "deployed by"), tuple(rows)
+                ("service", "host", "expose", "endpoints", "deployed by", "tags"),
+                tuple(rows),
             ),
         ),
         note=(
             "`AMBIGUOUS` means more than one pipeline claims the service and none "
-            "is marked authoritative. Do not guess which one deploys."
+            "is marked authoritative. Do not guess which one deploys. "
+            "`cadastre lookup tag:<tag>` lists everything carrying a tag."
         ),
     )
 
@@ -242,6 +245,7 @@ def _data(session: Session) -> dict[str, Any]:
                 "endpoints": [e.id for e in catalog.endpoints_of(s.id)],
                 "authoritative_pipeline": catalog.authoritative_pipeline(s.id),
                 "pipelines": [p.id for p in catalog.pipelines_for(s.id)],
+                "tags": list(s.tags),
             }
             for s in catalog.services
         ],

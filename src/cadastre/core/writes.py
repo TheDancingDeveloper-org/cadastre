@@ -112,6 +112,29 @@ def _source_owner(root: Path, kind: str) -> tuple[str, Any] | None:
     return None
 
 
+def _on_external_host(catalog: Catalog, kind: str, entity: model.Entity | None) -> bool:
+    """Whether an entity belongs to a third-party provider (host role `external`).
+
+    Source authority exists because an upstream system of record exists
+    (DESIGN §2.1). For a vendor endpoint we call but do not run there is none:
+    no tailnet, hypervisor, orchestrator, or ingress collector will ever
+    reflect it, so the catalog is the only place it can be authored. Secrets
+    are not covered — the secret store stays authoritative for its names.
+    """
+    if entity is None:
+        return False
+    if kind == "host":
+        return getattr(entity, "role", None) == "external"
+    if kind == "service":
+        host = catalog.get("host", getattr(entity, "runs_on", ""))
+        return host is not None and getattr(host, "role", None) == "external"
+    if kind == "endpoint":
+        return _on_external_host(
+            catalog, "service", catalog.get("service", getattr(entity, "service", ""))
+        )
+    return False
+
+
 def _refuse_source(
     operation: str, kind: str, ident: str | None, owner: tuple[str, Any]
 ) -> None:
@@ -180,7 +203,16 @@ def write(
         owner = _source_owner(root, kind)
         existing = catalog.get(kind, ident or "")
         if operation in {"add", "delete"} and owner is not None:
-            _refuse_source(operation, kind, ident, owner)
+            subject = existing
+            if operation == "add":
+                try:
+                    subject = _parse_candidate(
+                        kind, {"id": ident, **(values or {})}, registry
+                    )
+                except CatalogError:
+                    subject = None  # a malformed record is still refused
+            if not _on_external_host(catalog, kind, subject):
+                _refuse_source(operation, kind, ident, owner)
         if operation == "add":
             if not values:
                 raise UsageError("add needs an entity record")

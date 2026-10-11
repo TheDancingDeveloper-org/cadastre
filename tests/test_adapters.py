@@ -127,6 +127,17 @@ def test_sqlite_sessions_apply_observed_freshness(
     assert "fixture" in stale
 
 
+def test_http_lookup_decodes_a_percent_encoded_id(catalog_copy: Path) -> None:
+    """The remote client quotes `:` in the route, so `tag:llm` and observed
+    ids such as `infisical:apps-...` arrive as `%3A`; both forms resolve."""
+    for route in ("/lookup/tag:app-tier", "/lookup/tag%3Aapp-tier"):
+        server = CadastreHTTPServer(("127.0.0.1", 0), catalog_copy, allow_write=False)
+        status, result = _request(server, "GET", route)
+        assert status == 200, route
+        assert result["result"]["resolution"] == "tag-match"
+        assert result["result"]["tag"] == "app-tier"
+
+
 def test_http_read_surface_and_check_do_not_require_write_auth(
     catalog_copy: Path,
 ) -> None:

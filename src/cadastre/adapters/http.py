@@ -15,7 +15,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from cadastre import __version__
 from cadastre.adapters.security import (
@@ -435,7 +435,9 @@ class _Handler(BaseHTTPRequestHandler):
             elif path.startswith("/lookup/"):
                 self._call(
                     service.lookup(
-                        path.removeprefix("/lookup/"),
+                        # The client percent-encodes `:` (`tag:llm`,
+                        # `infisical:apps-...`); the id is the decoded form.
+                        unquote(path.removeprefix("/lookup/")),
                         kind=query.get("kind", [None])[0],
                     )
                 )

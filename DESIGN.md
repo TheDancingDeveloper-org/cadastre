@@ -115,6 +115,12 @@ Declaring a tailnet node into existence is either redundant — the API already
 agrees — or a lie, when the API disagrees. The second is worse than having no
 entry, so it is refused rather than accepted and later reconciled.
 
+A host with role `external` — a third-party endpoint we call but do not run —
+is the clean case of "nowhere else": no collector can reflect it, so the write
+gate treats it, the services running on it, and their endpoints as
+catalog-authoritative even though the same kinds are source-authoritative for
+estate hosts. Its secret is not exempt; the secret store still owns the name.
+
 Each plugin declares `authority: source | catalog` per entity type it owns
 (§4.2). Being partially source-authoritative is the normal case, not an
 exception: an orchestrator knows which stacks exist and will never know which of
