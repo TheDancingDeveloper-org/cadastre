@@ -132,3 +132,70 @@ def test_observed_store_is_always_refused(sqlite_catalog: Path) -> None:
             {"tags": ["blocked"]},
             store="observed",
         )
+
+
+# -- WI-1257: a third-party provider has no source of record but the catalog --
+
+
+def _add(root: Path, kind: str, values: dict[str, object]) -> None:
+    write(root, "add", kind, values=values, principal="test", reason="provider")
+
+
+def test_an_external_provider_is_catalog_authored(sqlite_catalog: Path) -> None:
+    """No collector reflects a vendor endpoint we call, so host role
+    `external`, a service on it, and that service's endpoint are authored
+    through the gated write path rather than refused (DESIGN §2.1)."""
+    _add(
+        sqlite_catalog,
+        "host",
+        {"id": "llm-vendor", "role": "external", "reachable_from": ["edge-net"]},
+    )
+    _add(
+        sqlite_catalog,
+        "service",
+        {"id": "llm-vendor-api", "runs_on": "llm-vendor", "tags": ["llm"]},
+    )
+    _add(
+        sqlite_catalog,
+        "endpoint",
+        {
+            "id": "llm-vendor-https",
+            "service": "llm-vendor-api",
+            "network": "edge-net",
+            "address": "api.vendor.example.invalid",
+            "protocol": "https",
+        },
+    )
+    catalog = CatalogStore.open(sqlite_catalog, read_only=True).read_catalog()
+    assert catalog.get("host", "llm-vendor") is not None
+    assert catalog.get("service", "llm-vendor-api") is not None
+    assert catalog.get("endpoint", "llm-vendor-https") is not None
+
+    write(sqlite_catalog, "delete", "endpoint", "llm-vendor-https")
+    catalog = CatalogStore.open(sqlite_catalog, read_only=True).read_catalog()
+    assert catalog.get("endpoint", "llm-vendor-https") is None
+
+
+def test_the_external_exemption_does_not_reach_estate_entities(
+    sqlite_catalog: Path,
+) -> None:
+    """A service on one of our hosts, and a secret even for a provider, are
+    still owned by their collectors."""
+    _add(sqlite_catalog, "host", {"id": "llm-vendor", "role": "external"})
+    with pytest.raises(WriteRefused, match=r"REFUSED  add orchestrator-gitops"):
+        _add(sqlite_catalog, "service", {"id": "rogue", "runs_on": "app-01"})
+    with pytest.raises(WriteRefused, match=r"REFUSED  add .*\.secret"):
+        _add(
+            sqlite_catalog,
+            "secret",
+            {"id": "llm-key", "ref": "/prod/llm/key", "store": "secrets-manager"},
+        )
+    with pytest.raises(WriteRefused, match=r"REFUSED  delete .*\.host"):
+        write(sqlite_catalog, "delete", "host", "app-01")
+
+
+def test_a_malformed_add_on_a_source_kind_is_still_refused(
+    sqlite_catalog: Path,
+) -> None:
+    with pytest.raises(WriteRefused, match=r"REFUSED  add"):
+        _add(sqlite_catalog, "host", {"id": "x", "role": "not-a-role"})

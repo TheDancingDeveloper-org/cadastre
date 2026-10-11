@@ -142,7 +142,10 @@
           "ci-internal"
         ],
         "authoritative_pipeline": null,
-        "pipelines": []
+        "pipelines": [],
+        "tags": [
+          "infrastructure"
+        ]
       },
       {
         "id": "forge",
@@ -152,7 +155,10 @@
           "forge-internal"
         ],
         "authoritative_pipeline": null,
-        "pipelines": []
+        "pipelines": [],
+        "tags": [
+          "infrastructure"
+        ]
       },
       {
         "id": "ingress",
@@ -164,6 +170,10 @@
         "authoritative_pipeline": "ops-repo-selfhosted",
         "pipelines": [
           "ops-repo-selfhosted"
+        ],
+        "tags": [
+          "infrastructure",
+          "ingress"
         ]
       },
       {
@@ -177,6 +187,9 @@
         "pipelines": [
           "notes-api-public",
           "notes-api-selfhosted"
+        ],
+        "tags": [
+          "app-tier"
         ]
       },
       {
@@ -187,7 +200,10 @@
           "notes-db-internal"
         ],
         "authoritative_pipeline": null,
-        "pipelines": []
+        "pipelines": [],
+        "tags": [
+          "persistent-data"
+        ]
       },
       {
         "id": "tagger",
@@ -197,6 +213,10 @@
         "authoritative_pipeline": "tagger-selfhosted",
         "pipelines": [
           "tagger-selfhosted"
+        ],
+        "tags": [
+          "app-tier",
+          "gpu"
         ]
       }
     ],

@@ -9,6 +9,26 @@ The version recorded here is `application_version` in
 `src/cadastre/release-compatibility.json`, which is attested to every released
 image as the schema-compatibility predicate.
 
+## Unreleased
+
+### Added
+
+- **Host role `external`.** A third-party service endpoint we depend on
+  (LLM/API vendor) without inventing a pseudo-host. Never a placement target:
+  `context_for` lists it under exclusions with "third-party provider; not a
+  placement target". Because no collector can reflect it, `add`/`delete` are
+  allowed for an external host, services running on it, and their endpoints;
+  every other source-authoritative refusal is unchanged. (WI-1257)
+- **`lookup tag:<tag>`.** Lists every declared entity carrying a tag, with
+  provenance and quoted notes; `--kind` narrows it, an unused tag answers
+  empty. `brief` service rows now carry `tags`. (WI-1258)
+
+### Fixed
+
+- HTTP `/lookup/<id>` decodes the percent-encoded id the remote client sends,
+  so ids containing `:` (`tag:llm`, `infisical:apps-...`) resolve through the
+  bridge.
+
 ## v0.2.5
 
 ### Added

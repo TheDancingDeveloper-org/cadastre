@@ -29,6 +29,7 @@ NON_TARGET_ROLES = {
     "router": "network device; reached over SSH, runs no workloads",
     "appliance": "appliance; runs no workloads of ours",
     "hypervisor": "hypervisor; place on a guest, not on the host",
+    "external": "third-party provider; not a placement target",
 }
 
 _SIZE_PATTERNS = (

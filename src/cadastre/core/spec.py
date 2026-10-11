@@ -132,6 +132,11 @@ ENTITY_SPECS: dict[str, EntitySpec] = {
                     "appliance",
                     "router",
                     "edge",
+                    "external",
+                ),
+                description=(
+                    "What the host is. `external` is a third-party service "
+                    "endpoint we depend on; never a placement target."
                 ),
             ),
             FieldSpec(
