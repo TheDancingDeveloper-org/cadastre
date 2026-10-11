@@ -151,7 +151,7 @@ and a working example call.
 
 A vendor the estate calls but does not run (an LLM API, a SaaS endpoint) is a
 host with role `external`. No collector can ever reflect it, so it is
-catalog-authored: `add` and `delete` are allowed for the host, a service that
+catalog-authored: `add`, `update` and `delete` are allowed for the host, a service that
 runs on it, and that service's endpoints, while the same kinds on estate hosts
 stay refused. Placement always excludes it ("third-party provider; not a
 placement target"). The secret stays owned by the secret store; name its ref

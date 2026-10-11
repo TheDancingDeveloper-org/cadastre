@@ -135,6 +135,28 @@ def _on_external_host(catalog: Catalog, kind: str, entity: model.Entity | None) 
     return False
 
 
+def _external_before_and_after(
+    catalog: Catalog,
+    kind: str,
+    existing: model.Entity,
+    updates: dict[str, Any],
+    registry: EntityRegistry,
+) -> bool:
+    """An update stays inside the exemption only if the entity is a provider's
+    both before and after it — so an estate host cannot be relabelled
+    `external`, nor a provider's service moved onto an estate host, to get
+    around source authority."""
+    if not _on_external_host(catalog, kind, existing):
+        return False
+    merged = entity_to_dict(existing, registry=registry)
+    merged.update({k: v for k, v in updates.items() if k != "id"})
+    try:
+        after = _parse_candidate(kind, merged, registry)
+    except CatalogError:
+        return False
+    return _on_external_host(catalog, kind, after)
+
+
 def _refuse_source(
     operation: str, kind: str, ident: str | None, owner: tuple[str, Any]
 ) -> None:
@@ -283,6 +305,10 @@ def write(
             )
         else:
             updates = dict(values or {})
+            if owner is not None and _external_before_and_after(
+                catalog, kind, existing, updates, registry
+            ):
+                owner = None  # no upstream owns a provider's fields
             if owner is not None:
                 classes = owner[1].field_classes
                 forbidden = sorted(

@@ -199,3 +199,23 @@ def test_a_malformed_add_on_a_source_kind_is_still_refused(
 ) -> None:
     with pytest.raises(WriteRefused, match=r"REFUSED  add"):
         _add(sqlite_catalog, "host", {"id": "x", "role": "not-a-role"})
+
+
+def test_a_provider_is_updatable_but_cannot_be_used_to_launder_authority(
+    sqlite_catalog: Path,
+) -> None:
+    """The review case: relabelling an estate host `external` would make it
+    deletable. `role` stays reflected for estate hosts, and an update only
+    keeps the exemption if the entity is a provider's before and after."""
+    _add(sqlite_catalog, "host", {"id": "llm-vendor", "role": "external"})
+    _add(sqlite_catalog, "service", {"id": "llm-api", "runs_on": "llm-vendor"})
+    write(sqlite_catalog, "update", "service", "llm-api", {"expose": "none"})
+    catalog = CatalogStore.open(sqlite_catalog, read_only=True).read_catalog()
+    assert catalog.get("service", "llm-api").expose == "none"  # type: ignore[union-attr]
+
+    with pytest.raises(WriteRefused, match=r"REFUSED update host"):
+        write(sqlite_catalog, "update", "host", "app-01", {"role": "external"})
+    with pytest.raises(WriteRefused, match=r"REFUSED update service"):
+        write(sqlite_catalog, "update", "service", "llm-api", {"runs_on": "app-01"})
+    with pytest.raises(WriteRefused, match=r"REFUSED update host"):
+        write(sqlite_catalog, "update", "host", "llm-vendor", {"role": "server"})
