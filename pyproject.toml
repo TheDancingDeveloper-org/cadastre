@@ -21,6 +21,9 @@ serve = ["mcp>=1.0"]
 # collector dependency surface, per §4.1 — it does not activate the module,
 # which is controlled solely by modules.yaml.
 manifest = []
+# GitHub App installation tokens (`app_auth` in plugins.yaml): RS256 signing
+# of the app JWT. Lazily imported, so estates on a static token never need it.
+github-app = ["cryptography>=43"]
 dev = [
   "pytest>=8.0",
   "pytest-cov>=5.0",
@@ -28,6 +31,7 @@ dev = [
   "mypy>=1.11",
   "types-PyYAML>=6.0",
   "build>=1.2",
+  "cryptography>=43",
 ]
 
 [project.scripts]

@@ -98,6 +98,24 @@ def call(
         params={**source.params, **(params or {})},
         config=source.config,
     )
+    env = build_env(source, environ)
+    if source.app_auth is not None:
+        from cadastre.plugins import github_app
+
+        base = environ if environ is not None else dict(os.environ)
+        try:
+            token = github_app.installation_token(
+                source.app_auth,
+                base,
+                owner=str(source.config.get("org") or source.config.get("user") or "")
+                or None,
+                api_base=str(source.config.get("endpoint") or github_app.DEFAULT_API),
+            )
+        except github_app.AppAuthError as exc:
+            return Outcome(source.id, method, None, exc.error)
+        # Wins over any static copy of the same variable: with app_auth set,
+        # a leftover PAT in the host environment must not be what is used.
+        env[str(source.config["token_env"])] = token
     try:
         completed = subprocess.run(
             list(source.command),
@@ -105,7 +123,7 @@ def call(
             capture_output=True,
             text=True,
             timeout=source.timeout_seconds,
-            env=build_env(source, environ),
+            env=env,
             check=False,
         )
     except FileNotFoundError:

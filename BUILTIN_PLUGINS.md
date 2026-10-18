@@ -174,6 +174,59 @@ protection, or write workflows.
   config: {endpoint: https://api.github.com, token_env: CADASTRE_P_GITHUB_TOKEN, org: example}
 ```
 
+`vcs.repos` with `user` (no `org`) calls `/users/{user}/repos`
+unauthenticated. That endpoint only lists public repositories, so a token adds
+nothing there.
+
+### GitHub App credentials (`app_auth`)
+
+`forge-github` and `work-github` can authenticate as a GitHub App instead of
+with a static token. The collector mints a short-lived installation token for
+each run. Static `token_env` sources still work unchanged, so you can migrate
+one source at a time.
+
+1. Create a GitHub App with only the read permissions the source's methods
+   need (for example `Metadata: read`, `Contents: read`, `Actions: read`,
+   `Issues: read`, `Pull requests: read`, and organisation
+   `Self-hosted runners: read` for `ci.status`). It needs no webhook.
+2. Install it on the organisation or user the source reads.
+3. Generate a private key. Mount it read-only into the collector, readable
+   only by the collector user.
+4. Put the app id in the collector environment. Optionally add the
+   installation id too.
+5. Add `app_auth` to the source, at the same level as `config`:
+
+```yaml
+- id: github
+  plugin: forge-github
+  command: [cadastre-plugin-forge-github]
+  methods: [vcs.repos, ci.pipelines]
+  app_auth:
+    app_id_env: CADASTRE_GITHUB_APP_ID            # required: env var holding the app id
+    private_key_file: /run/cadastre/github-app/private-key.pem   # required
+    installation_id_env: CADASTRE_GITHUB_APP_INSTALLATION_ID     # optional
+    owner: example                                # optional discovery owner
+  config: {endpoint: https://api.github.com, token_env: CADASTRE_P_GITHUB_TOKEN, org: example}
+```
+
+- `config.token_env` is required alongside `app_auth`. It names the variable
+  the minted token is handed to the plugin in. The minted token replaces any
+  static value of that variable.
+- Without `installation_id_env`, the installation is discovered for `owner`
+  (default: `config.org`, else `config.user`). Discovery tries
+  `/orgs/{owner}/installation` first, then `/users/{owner}/installation`.
+  Sources that read several owners can share one App.
+- The API base is the source's `config.endpoint`, which also covers GitHub
+  Enterprise Server.
+- Each process mints one token per (app, installation) and reuses it until
+  five minutes before it expires. The private key and the app JWT never reach
+  the plugin process.
+- Signing needs the `cryptography` package: install `cadastre[github-app]`.
+  The container image includes it.
+- A failed mint (missing variable, unreadable key, or 401/404 from GitHub)
+  marks the source stale with an `invalid_config`, `unauthorized` or
+  `unreachable` error. It does not crash the run.
+
 ### `ci.status`: self-hosted runners
 
 `ci.status` GETs organisation runner registrations and runner groups and

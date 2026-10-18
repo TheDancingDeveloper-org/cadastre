@@ -22,7 +22,7 @@ COPY security-constraints.txt ./
 # Versions live in security-constraints.txt, not here: this file is asserted to
 # carry no version literals outside FROM, so that image labels stay build args
 # (tests/test_version_identity.py).
-RUN pip install --no-cache-dir '.[serve,mcp-server]' \
+RUN pip install --no-cache-dir '.[serve,mcp-server,github-app]' \
  && pip install --no-cache-dir --upgrade -r security-constraints.txt
 # Stdlib-only (no curl, no shell tooling): the `collector` compose profile
 # routes through this to mint a short-lived Infisical token before exec'ing

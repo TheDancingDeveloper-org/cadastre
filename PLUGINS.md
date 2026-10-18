@@ -356,6 +356,9 @@ refuses all of them before starting a plugin. There is no `apply` method.
   stderr, warnings, or exception text.
 - The runner passes only a small base environment plus names explicitly listed
   in `env` or referenced by a `*_env` config key.
+- A source may carry an `app_auth` block instead of a static token. The runner
+  then mints a GitHub App installation token and hands it over in
+  `config.token_env` (see BUILTIN_PLUGINS.md, "GitHub App credentials").
 - Run collection on the collector host. API, MCP, and GUI processes do not need
   upstream credentials.
 - Treat collected text as untrusted data. Do not turn labels, descriptions, or

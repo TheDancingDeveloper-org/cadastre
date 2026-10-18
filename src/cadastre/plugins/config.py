@@ -34,6 +34,33 @@ class SourceConfig:
     #: Per-kind coverage for this configured source.  It narrows (never
     #: broadens) the registered plugin declaration for missing-drift checks.
     coverage: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: Mint the credential as a GitHub App installation token instead of
+    #: reading a static one: see `AppAuth`.
+    app_auth: AppAuth | None = None
+
+
+@dataclass(frozen=True)
+class AppAuth:
+    """A GitHub App identity the runner turns into an installation token.
+
+    Like `token_env`, it names where things are, never what they are: the app
+    id (and optionally the installation id) arrive by environment variable,
+    and the private key is a file path. Without `installation_id_env` the
+    installation is discovered for `owner` — by default the source's
+    `config.org`, else `config.user`. The minted token is handed to the
+    plugin under the source's `config.token_env`, so the plugin reads it
+    exactly as it would a static token and never sees the key.
+    """
+
+    app_id_env: str
+    private_key_file: str
+    installation_id_env: str | None = None
+    owner: str | None = None
+
+
+APP_AUTH_REQUIRED = ("app_id_env", "private_key_file")
+APP_AUTH_OPTIONAL = ("installation_id_env", "owner")
+APP_AUTH_KEYS = APP_AUTH_REQUIRED + APP_AUTH_OPTIONAL
 
 
 @dataclass(frozen=True)
@@ -214,6 +241,39 @@ def load_plugins(root: Path) -> PluginsFile:
                             "declared entity fields",
                         )
                     )
+        app_auth: AppAuth | None = None
+        raw_app_auth = item.get("app_auth")
+        if raw_app_auth is not None:
+            config_section = item.get("config") or {}
+            expected = (
+                ", ".join(APP_AUTH_REQUIRED)
+                + " (optionally "
+                + ", ".join(APP_AUTH_OPTIONAL)
+                + ") as non-empty strings"
+            )
+            if not isinstance(raw_app_auth, dict) or (
+                any(str(k) not in APP_AUTH_KEYS for k in raw_app_auth)
+                or not all(k in raw_app_auth for k in APP_AUTH_REQUIRED)
+                or not all(isinstance(v, str) and v for v in raw_app_auth.values())
+            ):
+                issues.append(
+                    CatalogIssue(at, f"{label}.app_auth", "invalid app_auth", expected)
+                )
+            elif not (
+                isinstance(config_section, dict)
+                and isinstance(config_section.get("token_env"), str)
+                and config_section["token_env"]
+            ):
+                issues.append(
+                    CatalogIssue(
+                        at,
+                        f"{label}.config.token_env",
+                        "app_auth without token_env",
+                        "the variable the minted token is handed over in",
+                    )
+                )
+            else:
+                app_auth = AppAuth(**{str(k): str(v) for k, v in raw_app_auth.items()})
         sources.append(
             SourceConfig(
                 id=ident,
@@ -226,6 +286,7 @@ def load_plugins(root: Path) -> PluginsFile:
                 enabled=bool(item.get("enabled", True)),
                 env=tuple(str(name) for name in (item.get("env") or ())),
                 coverage={str(kind): dict(value) for kind, value in coverage.items()},
+                app_auth=app_auth,
             )
         )
     if issues:
