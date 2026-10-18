@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -127,11 +127,15 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "build" },
+    { name = "cryptography" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "types-pyyaml" },
+]
+github-app = [
+    { name = "cryptography" },
 ]
 mcp-client = [
     { name = "mcp" },
@@ -146,6 +150,8 @@ serve = [
 [package.metadata]
 requires-dist = [
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.2" },
+    { name = "cryptography", marker = "extra == 'dev'", specifier = ">=43" },
+    { name = "cryptography", marker = "extra == 'github-app'", specifier = ">=43" },
     { name = "mcp", marker = "extra == 'mcp-client'", specifier = ">=1.0" },
     { name = "mcp", marker = "extra == 'mcp-server'", specifier = ">=1.0" },
     { name = "mcp", marker = "extra == 'serve'", specifier = ">=1.0" },
@@ -156,7 +162,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
 ]
-provides-extras = ["mcp-server", "mcp-client", "serve", "manifest", "dev"]
+provides-extras = ["mcp-server", "mcp-client", "serve", "manifest", "github-app", "dev"]
 
 [[package]]
 name = "cffi"

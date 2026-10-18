@@ -21,6 +21,7 @@ import base64
 import binascii
 import re
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -703,7 +704,13 @@ def _repo_path(config: dict[str, Any]) -> str:
 
 
 def _repos(request: Request) -> Reply:
-    endpoint = Endpoint.from_config(request.config)
+    org = bool(request.config.get("org"))
+    endpoint = Endpoint.from_config(request.config, required=org)
+    if not org:
+        # /users/{user}/repos only ever lists public repositories, so a
+        # credential adds nothing but exposure — and an App installation
+        # token is not valid for a personal account it is not installed on.
+        endpoint = replace(endpoint, token=None)
     items = _paged(endpoint, _repo_path(request.config))
     return ok(
         transform_repos(items, request.config),

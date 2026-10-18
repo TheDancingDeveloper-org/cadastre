@@ -76,6 +76,13 @@ sources:
     plugin: forge-github
     command: [cadastre-plugin-forge-github]
     methods: [vcs.repos, ci.pipelines]
+    # Optional: authenticate as a GitHub App instead of a static token. The
+    # minted installation token is handed over in config's token variable;
+    # the installation is discovered for config.org unless an id is given.
+    # app_auth:
+    #   app_id_env: CADASTRE_GITHUB_APP_ID
+    #   private_key_file: /run/cadastre/github-app/private-key.pem
+    #   installation_id_env: CADASTRE_GITHUB_APP_INSTALLATION_ID   # optional
     config:
       endpoint: https://api.github.com
       token_env: CADASTRE_P_GITHUB_TOKEN
