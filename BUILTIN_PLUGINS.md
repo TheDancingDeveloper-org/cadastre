@@ -280,6 +280,18 @@ repository ids with `owner/name` for display. Identity is the numeric id, so a
 renamed runner is the same runner. Ordering is normalised, so an upstream that
 shuffles its pages does not read as a change.
 
+### `ci.pipelines`: workflow listing concurrency
+
+`ci.pipelines` asks each repository for its workflow list, one call per
+repository. Those calls run through a small bounded pool so a large
+organisation finishes inside the source's `timeout_seconds` instead of
+timing out and going stale. `config.workflow_concurrency` sets the pool size:
+default 8, allowed 1..16, anything else is `invalid_config`. Results keep the
+repository order, and one failed listing fails the method, so a partial
+pipeline list is never published. Lower it if GitHub's secondary rate limit
+is hit; raise `timeout_seconds` on the source if the organisation is very
+large.
+
 ### `ci.pipelines`: optional workflow selectors and job history
 
 Two further sections are available on the repository/workflow source. Both are
