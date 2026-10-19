@@ -294,6 +294,11 @@ ENTITY_SPECS: dict[str, EntitySpec] = {
                 "str",
                 description="The routing and authorization scope it registered in.",
             ),
+            FieldSpec(
+                "name",
+                "str",
+                description="Display name as registered. Searchable, never identity.",
+            ),
             FieldSpec("pool", "ref", ref="ci_pool"),
             FieldSpec(
                 "status",

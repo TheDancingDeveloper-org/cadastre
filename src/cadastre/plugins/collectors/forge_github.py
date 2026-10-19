@@ -21,6 +21,7 @@ import base64
 import binascii
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -38,6 +39,14 @@ CAPABILITIES = ("VCS", "CI")
 
 PAGE_SIZE = 100
 MAX_PAGES = 10
+
+#: `ci.pipelines` asks every repository for its workflows: one call each. Made
+#: one after another, a few hundred repositories outlast the runner's whole
+#: per-source timeout and the source goes stale with nothing published. A
+#: small bounded pool keeps the wall clock to a fraction of that without
+#: becoming a burst GitHub's secondary rate limit would notice.
+DEFAULT_WORKFLOW_CONCURRENCY = 8
+MAX_WORKFLOW_CONCURRENCY = 16
 
 #: `ci.status` gets its own, much higher ceiling. Ten pages is a fine limit for
 #: a repository list that is allowed to be a sample; a runner inventory that
@@ -551,6 +560,8 @@ def transform_execution_targets(
                 if label.get("name")
             ),
         }
+        if runner.get("name"):
+            entity["name"] = str(runner["name"])
         if runner.get("os"):
             entity["os"] = str(runner["os"])
         if runner.get("version"):
@@ -909,6 +920,39 @@ def _job_history(
     return evidence
 
 
+def _workflow_concurrency(config: dict[str, Any]) -> int:
+    try:
+        value = int(config.get("workflow_concurrency", DEFAULT_WORKFLOW_CONCURRENCY))
+    except (TypeError, ValueError) as exc:
+        raise HttpError(
+            "invalid_config", "config.workflow_concurrency must be an integer"
+        ) from exc
+    if value < 1 or value > MAX_WORKFLOW_CONCURRENCY:
+        raise HttpError(
+            "invalid_config",
+            f"config.workflow_concurrency must be 1..{MAX_WORKFLOW_CONCURRENCY}",
+        )
+    return value
+
+
+def _workflow_listings(
+    endpoint: Endpoint, repos: list[str], config: dict[str, Any]
+) -> list[Any]:
+    """Each repository's workflow list, in the order the repositories came.
+
+    Fetched concurrently; any one failure fails the whole method, as the
+    sequential loop did, rather than publishing a partial pipeline list.
+    """
+    workers = min(_workflow_concurrency(config), max(len(repos), 1))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(
+            pool.map(
+                lambda name: get_json(endpoint, f"/repos/{name}/actions/workflows"),
+                repos,
+            )
+        )
+
+
 def _pipelines(request: Request) -> Reply:
     """Workflow definitions, and optionally where they say they will run.
 
@@ -921,13 +965,14 @@ def _pipelines(request: Request) -> Reply:
     items = _paged(endpoint, _repo_path(request.config))
     pipelines: list[Any] = []
     workflow_paths: dict[str, list[str]] = {}
-    repos: list[str] = []
-    for item in items:
-        full_name = str(item.get("full_name") or "")
-        if not full_name:
-            continue
-        repos.append(full_name)
-        payload = get_json(endpoint, f"/repos/{full_name}/actions/workflows")
+    repos = [
+        str(item.get("full_name") or "")
+        for item in items
+        if isinstance(item, dict) and item.get("full_name")
+    ]
+    for full_name, payload in zip(
+        repos, _workflow_listings(endpoint, repos, request.config), strict=True
+    ):
         transformed = transform_workflows(
             payload, full_name.replace("/", "-"), request.config
         )

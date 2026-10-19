@@ -512,6 +512,10 @@
           "type": "string",
           "description": "The routing and authorization scope it registered in."
         },
+        "name": {
+          "type": "string",
+          "description": "Display name as registered. Searchable, never identity."
+        },
         "pool": {
           "type": "string",
           "x-cadastre-ref": "ci_pool"
