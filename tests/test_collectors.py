@@ -959,7 +959,7 @@ def test_workflow_concurrency_is_bounded() -> None:
         "ci.pipelines", GITHUB_PIPELINE_RESPONSES, {"workflow_concurrency": 99}
     )
     assert reply["ok"] is False
-    assert reply["error"]["code"] == "invalid_config"
+    assert reply["error"]["kind"] == "invalid_config"
 
 
 def test_a_workflow_selector_becomes_a_neutral_routing_fact() -> None:
