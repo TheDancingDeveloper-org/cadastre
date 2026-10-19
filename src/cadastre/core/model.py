@@ -187,6 +187,9 @@ class CiExecutor(Entity):
 
     system: str = ""
     scope: str = ""
+    #: The registration's display name, for lookup by words. Never identity:
+    #: a rename keeps the id, and the name says nothing about the host.
+    name: str | None = None
     pool: str | None = None
     status: str = "unknown"
     busy: bool = False

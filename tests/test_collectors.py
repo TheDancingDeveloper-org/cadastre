@@ -904,6 +904,64 @@ def test_workflow_selectors_are_off_unless_a_source_asks_for_them() -> None:
     assert not [path for path, _ in calls if "/contents/" in path]
 
 
+def _many_repo_responses(count: int) -> dict[str, Any]:
+    responses: dict[str, Any] = {
+        "/orgs/example/repos": [
+            {"full_name": f"example/repo-{i:03d}"} for i in range(count)
+        ]
+    }
+    for i in range(count):
+        responses[f"/repos/example/repo-{i:03d}/actions/workflows"] = {
+            "workflows": [{"name": f"wf-{i:03d}", "path": ".github/workflows/ci.yaml"}]
+        }
+    return responses
+
+
+def test_workflow_listings_are_fetched_concurrently_and_kept_in_order() -> None:
+    """One serial call per repository outlasted the source timeout."""
+    import threading
+    import time
+
+    responses = _many_repo_responses(24)
+    lock = threading.Lock()
+    active = peak = 0
+
+    def respond(path: str, params: Any) -> Any:
+        nonlocal active, peak
+        if path.endswith("/actions/workflows"):
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            time.sleep(0.02)
+            with lock:
+                active -= 1
+        return responses.get(path)
+
+    reply, calls = _github("ci.pipelines", respond, {"workflow_concurrency": 4})
+    assert reply["ok"] is True, reply
+    repos = [p["repo"] for p in reply["result"]["entities"]["pipeline"]]
+    assert repos == [f"example-repo-{i:03d}" for i in range(24)]
+    assert 1 < peak <= 4
+    assert len([c for c in calls if c[0].endswith("/actions/workflows")]) == 24
+
+
+def test_one_failed_workflow_listing_fails_the_method() -> None:
+    responses = _many_repo_responses(5)
+    responses["/repos/example/repo-003/actions/workflows"] = HttpError(
+        "unreachable", "boom", retryable=True
+    )
+    reply, _ = _github("ci.pipelines", responses)
+    assert reply["ok"] is False
+
+
+def test_workflow_concurrency_is_bounded() -> None:
+    reply, _ = _github(
+        "ci.pipelines", GITHUB_PIPELINE_RESPONSES, {"workflow_concurrency": 99}
+    )
+    assert reply["ok"] is False
+    assert reply["error"]["code"] == "invalid_config"
+
+
 def test_a_workflow_selector_becomes_a_neutral_routing_fact() -> None:
     jobs = {item["job"]: item["selector"] for item in _selectors()["selectors"]}
     assert jobs["build"] == {
@@ -1185,6 +1243,17 @@ def test_a_renamed_runner_is_the_same_executor() -> None:
     assert [e["id"] for e in before["result"]["entities"]["ci_executor"]] == [
         e["id"] for e in after["result"]["entities"]["ci_executor"]
     ]
+
+
+def test_an_executor_carries_its_display_name_for_lookup() -> None:
+    """The name makes a runner findable by words; identity stays the id."""
+    renamed = [{**runner, "name": "renamed"} for runner in GITHUB_RUNNERS]
+    responses = dict(GITHUB_CI_STATUS_RESPONSES)
+    responses["/orgs/example/actions/runners"] = {"runners": renamed}
+    reply, _ = _ci_status(responses)
+    executors = reply["result"]["entities"]["ci_executor"]
+    assert executors and all(e["name"] == "renamed" for e in executors)
+    assert all("renamed" not in e["id"] for e in executors)
 
 
 def test_pool_access_reaches_the_neutral_entity() -> None:
