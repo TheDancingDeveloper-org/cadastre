@@ -1502,7 +1502,102 @@ def test_proxmox_reports_guests_and_their_hypervisor() -> None:
     assert hosts["app-01"]["hosted_in"] == "hv-01"
     assert hosts["app-01"]["resources"]["memory_gb"] == 32
     assert "local" not in hosts  # storage is not a host
-    _parses(result)
+    _parses(result, extensions={"host": {"x-proxmox"}})
+
+
+PROXMOX_FULL = {
+    "data": [
+        {"type": "node", "node": "pve", "status": "online", "maxcpu": 20},
+        {
+            "type": "storage",
+            "node": "pve",
+            "storage": "vmdata",
+            "plugintype": "lvmthin",
+            "status": "available",
+            "disk": 50 * 1024**3,
+            "maxdisk": 200 * 1024**3,
+        },
+        {
+            "type": "qemu",
+            "node": "pve",
+            "vmid": 100,
+            "name": "vm-a",
+            "status": "running",
+            "tags": "ci;runner",
+            "cpu": 0.25,
+            "mem": 2 * 1024**3,
+            "maxmem": 8 * 1024**3,
+        },
+        {
+            "type": "lxc",
+            "node": "pve",
+            "vmid": 109,
+            "name": "ct-b",
+            "status": "running",
+        },
+        {
+            "type": "qemu",
+            "node": "pve",
+            "vmid": 9000,
+            "name": "tmpl",
+            "status": "stopped",
+            "template": 1,
+        },
+    ]
+}
+
+
+def test_proxmox_detail_addresses_storage_and_smart() -> None:
+    calls: list[str] = []
+
+    def fetch(path: str) -> Any:
+        calls.append(path)
+        if path.endswith("/qemu/100/agent/network-get-interfaces"):
+            return {
+                "result": [
+                    {"ip-addresses": [{"ip-address": "127.0.0.1"}]},
+                    {
+                        "ip-addresses": [
+                            {"ip-address": "192.168.1.50"},
+                            {"ip-address": "fe80::1"},
+                            {"ip-address": "100.64.0.9"},
+                        ]
+                    },
+                ]
+            }
+        if path.endswith("/lxc/109/interfaces"):
+            raise HttpError("forbidden", "no")
+        if path == "/nodes/pve/disks/list":
+            return [
+                {
+                    "devpath": "/dev/nvme0n1",
+                    "model": "X",
+                    "health": "PASSED",
+                    "wearout": 97,
+                    "size": 1024**4,
+                }
+            ]
+        raise AssertionError(path)
+
+    result = hypervisor_proxmox.transform(
+        PROXMOX_FULL, {"id_map": {"vm-a": "vm-a-catalog"}}, fetch=fetch
+    )
+    hosts = {h["id"]: h for h in result["entities"]["host"]}
+    vm = hosts["vm-a-catalog"]
+    assert vm["hosted_in"] == "pve"  # falls back to the guest's node
+    assert vm["x-proxmox"]["vmid"] == 100
+    assert vm["x-proxmox"]["tags"] == ["ci", "runner"]
+    assert vm["x-proxmox"]["addresses"] == ["100.64.0.9", "192.168.1.50"]
+    assert vm["x-proxmox"]["usage"]["cpu_percent"] == 25.0
+    # An unreachable agent costs the addresses, not the collection.
+    assert "addresses" not in hosts["ct-b"]["x-proxmox"]
+    assert hosts["ct-b"]["x-proxmox"]["type"] == "lxc"
+    # Templates are never asked for addresses.
+    assert not any("/9000/" in c for c in calls)
+    node = hosts["pve"]["x-proxmox"]
+    assert node["storage"][0]["used_percent"] == 25.0
+    assert node["disks"][0]["health"] == "PASSED"
+    _parses(result, extensions={"host": {"x-proxmox"}})
 
 
 def test_hyperv_reports_guests_and_synthesises_their_host() -> None:
