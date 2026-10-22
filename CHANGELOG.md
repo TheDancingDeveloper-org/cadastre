@@ -9,6 +9,15 @@ The version recorded here is `application_version` in
 `src/cadastre/release-compatibility.json`, which is attested to every released
 image as the schema-compatibility predicate.
 
+## v0.2.7
+
+### Added
+
+- `hypervisor-proxmox` now fully indexes each Proxmox host: guest status, PVE tags,
+  live CPU/RAM/disk usage and guest IP addresses, plus per-node storage pools and
+  disk SMART health. Guests are placed under their PVE node, and a new `id_map`
+  setting maps guest names to catalog ids (WI-2146, #60).
+
 ## v0.2.6
 
 ### Added
