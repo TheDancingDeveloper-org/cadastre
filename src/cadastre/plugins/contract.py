@@ -257,6 +257,74 @@ ATTRIBUTE_SCHEMAS: dict[tuple[str, str], dict[str, Any]] = {
         },
         "additionalProperties": True,
     },
+    # Proxmox guest and node detail (WI-2146). Guests carry vmid, kind, live
+    # status, PVE tags, usage and agent-reported addresses; nodes carry their
+    # storage pools and disks with SMART health. Hypervisor vocabulary the
+    # neutral `host` has no field for, so it rides here.
+    ("hypervisor-proxmox", "host"): {
+        "type": "object",
+        "properties": {
+            "x-proxmox": {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string", "enum": ["node", "qemu", "lxc"]},
+                    "vmid": {"type": "integer"},
+                    "node": {"type": "string"},
+                    "status": {"type": "string"},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                    "addresses": {"type": "array", "items": {"type": "string"}},
+                    "usage": {
+                        "type": "object",
+                        "properties": {
+                            "cpu_percent": {"type": "number"},
+                            "memory_gb_used": {"type": "number"},
+                            "disk_gb_used": {"type": "number"},
+                            "uptime_seconds": {"type": "integer"},
+                        },
+                        "additionalProperties": False,
+                    },
+                    "storage": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["name"],
+                            "properties": {
+                                "name": {"type": "string"},
+                                "plugintype": {"type": "string"},
+                                "status": {"type": "string"},
+                                "content": {"type": "string"},
+                                "total_gb": {"type": "integer"},
+                                "used_gb": {"type": "integer"},
+                                "used_percent": {"type": "number"},
+                                "shared": {"type": "boolean"},
+                            },
+                            "additionalProperties": False,
+                        },
+                    },
+                    "disks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["devpath"],
+                            "properties": {
+                                "devpath": {"type": "string"},
+                                "model": {"type": "string"},
+                                "serial": {"type": "string"},
+                                "type": {"type": "string"},
+                                "health": {"type": "string"},
+                                "size_gb": {"type": "integer"},
+                                "wearout": {"type": "integer"},
+                            },
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["type"],
+                "additionalProperties": False,
+            },
+        },
+        "additionalProperties": True,
+    },
     # Where a secret lives and the shape of its value — never the value. The
     # collector reduces the value to counts in-process (core.secretshape);
     # `secret_describe` reads this block. Neutrally named so any secret-store
