@@ -13,6 +13,7 @@ from cadastre.mcp.sdk import (
     EntityId,
     FromContext,
     Hostname,
+    HostRef,
     Query,
     SecretRef,
     ServiceName,
@@ -67,6 +68,23 @@ def credential_for(service: ServiceName, action: Action = None) -> str:
     )
 
 
+def access(host: HostRef) -> str:
+    """How to connect to a host, from declared data: login user, credential
+    (secret reference plus a ready agent-auth manifest line), path (network and
+    address; tailnet, LAN or public), whether Tailscale SSH is on, and the
+    matching skill. `host` is an id or an alias. A fact the catalog does not
+    declare is named under Missing, never guessed. Never a secret value.
+    Example: access(host="app-01")."""
+    from cadastre.mcp import server
+
+    return server._answer(
+        lambda endpoint, token: server.client.request(
+            endpoint, "/access", query={"host": host}, token=token
+        ),
+        lambda: server._queries().access(host),
+    )
+
+
 def dns_chain(hostname: Hostname) -> str:
     """Check a hostname's chain: DNS record -> ingress edge -> node -> service,
     from collected evidence (no live probing). Flags e.g. a proxied hostname
@@ -116,4 +134,4 @@ def reachable(from_context: FromContext, to: Target) -> str:
     )
 
 
-ESTATE_TOOLS = (credential_for, dns_chain, secret_describe, reachable)
+ESTATE_TOOLS = (access, credential_for, dns_chain, secret_describe, reachable)

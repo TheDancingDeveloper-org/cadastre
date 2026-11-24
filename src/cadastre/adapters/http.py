@@ -464,6 +464,8 @@ class _Handler(BaseHTTPRequestHandler):
                         query.get("action", [None])[0],
                     )
                 )
+            elif path == "/access":
+                self._call(service.access(query.get("host", [""])[0]))
             elif path == "/dns-chain":
                 self._call(service.dns_chain(query.get("hostname", [""])[0]))
             elif path == "/secret-describe":

@@ -26,6 +26,7 @@ def test_it_exposes_exactly_the_documented_tools() -> None:
         "context_for",
         "check",
         "lookup",
+        "access",
         "credential_for",
         "dns_chain",
         "secret_describe",

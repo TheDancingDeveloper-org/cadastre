@@ -17,6 +17,7 @@ from cadastre.mcp.sdk import (
     EntityId,
     FromContext,
     Hostname,
+    HostRef,
     Intent,
     Query,
     SecretRef,
@@ -146,6 +147,9 @@ def build_server() -> Any:
 
     def credential_for(service: ServiceName, action: Action = None) -> str:
         return _remote_tool("credential_for", {"service": service, "action": action})
+
+    def access(host: HostRef) -> str:
+        return _remote_tool("access", {"host": host})
 
     def dns_chain(hostname: Hostname) -> str:
         return _remote_tool("dns_chain", {"hostname": hostname})
@@ -283,6 +287,7 @@ def build_server() -> Any:
         context_for,
         check,
         lookup,
+        access,
         credential_for,
         dns_chain,
         secret_describe,
