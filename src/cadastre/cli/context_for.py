@@ -10,16 +10,78 @@ it (DESIGN §3.2).
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
+from cadastre.cli.lookup import lookup
 from cadastre.cli.session import Session
+from cadastre.core.errors import AmbiguousEntityError, MissingEntityError
 from cadastre.core.placement import Exclusion, placement_for
 from cadastre.core.topology import select as select_topologies
 from cadastre.core.trust import contest_policy, presented_records
 from cadastre.render.document import Bullets, Document, Fields, Para, Section, Table
 
+#: Verbs that ask about reaching an existing thing, not placing a new one.
+_ACCESS_VERBS = re.compile(
+    r"\b(?:ssh|sftp|scp|connect|reach|access|log\s?in|login|shell|rdp|console)\b"
+)
+_ACCESS_FILLER = {
+    "ssh", "sftp", "scp", "connect", "reach", "access", "log", "login", "in",
+    "into", "to", "onto", "shell", "rdp", "console", "the", "a", "an", "host",
+    "server", "service", "machine", "box", "node", "via", "from", "how", "do",
+    "i", "can", "me", "my", "please", "want", "need", "should", "using", "with",
+}  # fmt: skip
+
+
+def _access_document(session: Session, intent: str) -> Document | None:
+    """Answer an access-verb intent about an existing entity, never placement.
+
+    Returns None when the intent has no access verb, so placement proceeds.
+    """
+    text = intent.lower()
+    if not _ACCESS_VERBS.search(text):
+        return None
+    words = [w for w in re.findall(r"[a-z0-9][a-z0-9._-]*", text)]
+    names = [w for w in words if w not in _ACCESS_FILLER]
+    for name in names:
+        try:
+            return lookup(session, name)
+        except (MissingEntityError, AmbiguousEntityError) as error:
+            if isinstance(error, AmbiguousEntityError):
+                raise
+    return Document(
+        title=f"cadastre context-for {intent}",
+        sections=(
+            Section(
+                "Interpreted as",
+                (
+                    Para(
+                        "An access request for an existing host or service. "
+                        "No placement candidates are offered for it."
+                    ),
+                ),
+            ),
+            Section(
+                "Not found",
+                (
+                    Para(
+                        "No catalog or observed entity matches: "
+                        + (", ".join(names) or "(no name in the intent)")
+                        + ". If it should exist, the catalog is wrong; say so "
+                        "rather than assuming a name."
+                    ),
+                ),
+            ),
+        ),
+        provenance=session.provenance(),
+        data={"intent": intent, "access": True, "matched": None, "names": names},
+    )
+
 
 def context_for(session: Session, intent: str) -> Document:
+    access = _access_document(session, intent)
+    if access is not None:
+        return access
     catalog = session.catalog
     placement = placement_for(catalog, intent)
     contests = {
