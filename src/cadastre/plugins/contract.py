@@ -223,6 +223,9 @@ CATALOG_OWNED_FIELDS: dict[str, tuple[str, ...]] = {
 #: warning it can never clear.
 EMPTINESS_NOT_CREDIBLE: dict[str, tuple[str, ...]] = {
     "hypervisor-proxmox": ("host",),
+    # A k3s cluster always has at least one node; zero means the service
+    # account cannot list nodes, not that the cluster is empty.
+    "infra-k3s": ("host",),
 }
 
 
@@ -252,6 +255,35 @@ ATTRIBUTE_SCHEMAS: dict[tuple[str, str], dict[str, Any]] = {
                     "addresses": {"type": "array", "items": {"type": "string"}},
                     "os": {"type": "string"},
                 },
+                "additionalProperties": False,
+            },
+        },
+        "additionalProperties": True,
+    },
+    # k3s node facts (WI-4564). Roles, pressure conditions and capacity the
+    # neutral `host` has no field for. Addresses are also aliases on the host.
+    ("infra-k3s", "host"): {
+        "type": "object",
+        "properties": {
+            "x-k3s": {
+                "type": "object",
+                "properties": {
+                    "roles": {"type": "array", "items": {"type": "string"}},
+                    "ready": {"type": "boolean"},
+                    "ready_reason": {"type": "string"},
+                    "disk_pressure": {"type": "boolean"},
+                    "memory_pressure": {"type": "boolean"},
+                    "pid_pressure": {"type": "boolean"},
+                    "addresses": {"type": "array", "items": {"type": "string"}},
+                    "node_name": {"type": "string"},
+                    "unschedulable": {"type": "boolean"},
+                    "pod_capacity": {"type": "integer"},
+                    "kubelet_version": {"type": "string"},
+                    "os_image": {"type": "string"},
+                    "kernel_version": {"type": "string"},
+                    "architecture": {"type": "string"},
+                },
+                "required": ["roles"],
                 "additionalProperties": False,
             },
         },

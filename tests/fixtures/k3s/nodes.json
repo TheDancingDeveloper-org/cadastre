@@ -1,0 +1,249 @@
+{
+  "kind": "NodeList",
+  "apiVersion": "v1",
+  "items": [
+    {
+      "metadata": {
+        "name": "winrarhost1",
+        "labels": {
+          "kubernetes.io/hostname": "winrarhost1",
+          "node-role.kubernetes.io/control-plane": "true",
+          "node-role.kubernetes.io/etcd": "true",
+          "node-role.kubernetes.io/master": "true"
+        }
+      },
+      "spec": {},
+      "status": {
+        "capacity": {
+          "cpu": "8",
+          "memory": "32768000Ki",
+          "ephemeral-storage": "478000000Ki",
+          "pods": "110"
+        },
+        "conditions": [
+          {
+            "type": "MemoryPressure",
+            "status": "False",
+            "reason": "KubeletHasSufficientMemory"
+          },
+          {
+            "type": "DiskPressure",
+            "status": "False",
+            "reason": "KubeletHasNoDiskPressure"
+          },
+          {
+            "type": "PIDPressure",
+            "status": "False",
+            "reason": "KubeletHasSufficientPID"
+          },
+          {
+            "type": "Ready",
+            "status": "True",
+            "reason": "KubeletReady"
+          }
+        ],
+        "addresses": [
+          {
+            "type": "InternalIP",
+            "address": "192.168.1.11"
+          },
+          {
+            "type": "ExternalIP",
+            "address": "100.64.0.11"
+          },
+          {
+            "type": "Hostname",
+            "address": "winrarhost1"
+          }
+        ],
+        "nodeInfo": {
+          "kubeletVersion": "v1.31.4+k3s1",
+          "osImage": "Ubuntu 24.04.1 LTS",
+          "kernelVersion": "6.8.0-51-generic",
+          "architecture": "amd64"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "name": "winrarhost2",
+        "labels": {
+          "kubernetes.io/hostname": "winrarhost2",
+          "node-role.kubernetes.io/control-plane": "true",
+          "node-role.kubernetes.io/etcd": "true",
+          "node-role.kubernetes.io/master": "true"
+        }
+      },
+      "spec": {},
+      "status": {
+        "capacity": {
+          "cpu": "8",
+          "memory": "32768000Ki",
+          "ephemeral-storage": "478000000Ki",
+          "pods": "110"
+        },
+        "conditions": [
+          {
+            "type": "MemoryPressure",
+            "status": "False",
+            "reason": "KubeletHasSufficientMemory"
+          },
+          {
+            "type": "DiskPressure",
+            "status": "False",
+            "reason": "KubeletHasNoDiskPressure"
+          },
+          {
+            "type": "PIDPressure",
+            "status": "False",
+            "reason": "KubeletHasSufficientPID"
+          },
+          {
+            "type": "Ready",
+            "status": "True",
+            "reason": "KubeletReady"
+          }
+        ],
+        "addresses": [
+          {
+            "type": "InternalIP",
+            "address": "192.168.1.12"
+          },
+          {
+            "type": "ExternalIP",
+            "address": "100.64.0.12"
+          },
+          {
+            "type": "Hostname",
+            "address": "winrarhost2"
+          }
+        ],
+        "nodeInfo": {
+          "kubeletVersion": "v1.31.4+k3s1",
+          "osImage": "Ubuntu 24.04.1 LTS",
+          "kernelVersion": "6.8.0-51-generic",
+          "architecture": "amd64"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "name": "winrarhost3",
+        "labels": {
+          "kubernetes.io/hostname": "winrarhost3"
+        }
+      },
+      "spec": {},
+      "status": {
+        "capacity": {
+          "cpu": "16",
+          "memory": "65536000Ki",
+          "ephemeral-storage": "478000000Ki",
+          "pods": "110"
+        },
+        "conditions": [
+          {
+            "type": "MemoryPressure",
+            "status": "False"
+          },
+          {
+            "type": "DiskPressure",
+            "status": "True",
+            "reason": "KubeletHasDiskPressure"
+          },
+          {
+            "type": "PIDPressure",
+            "status": "False"
+          },
+          {
+            "type": "Ready",
+            "status": "True",
+            "reason": "KubeletReady"
+          }
+        ],
+        "addresses": [
+          {
+            "type": "InternalIP",
+            "address": "192.168.1.13"
+          },
+          {
+            "type": "ExternalIP",
+            "address": "100.64.0.13"
+          },
+          {
+            "type": "Hostname",
+            "address": "winrarhost3"
+          }
+        ],
+        "nodeInfo": {
+          "kubeletVersion": "v1.31.4+k3s1",
+          "osImage": "Ubuntu 24.04.1 LTS",
+          "kernelVersion": "6.8.0-51-generic",
+          "architecture": "amd64"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "name": "winrarhost4",
+        "labels": {
+          "kubernetes.io/hostname": "winrarhost4",
+          "node-role.kubernetes.io/worker": "true"
+        }
+      },
+      "spec": {
+        "unschedulable": true
+      },
+      "status": {
+        "capacity": {
+          "cpu": "8",
+          "memory": "32768000Ki",
+          "ephemeral-storage": "478000000Ki",
+          "pods": "110"
+        },
+        "conditions": [
+          {
+            "type": "MemoryPressure",
+            "status": "Unknown",
+            "reason": "NodeStatusUnknown"
+          },
+          {
+            "type": "DiskPressure",
+            "status": "Unknown",
+            "reason": "NodeStatusUnknown"
+          },
+          {
+            "type": "PIDPressure",
+            "status": "Unknown",
+            "reason": "NodeStatusUnknown"
+          },
+          {
+            "type": "Ready",
+            "status": "Unknown",
+            "reason": "NodeStatusUnknown"
+          }
+        ],
+        "addresses": [
+          {
+            "type": "InternalIP",
+            "address": "192.168.1.14"
+          },
+          {
+            "type": "ExternalIP",
+            "address": "100.64.0.14"
+          },
+          {
+            "type": "Hostname",
+            "address": "winrarhost4"
+          }
+        ],
+        "nodeInfo": {
+          "kubeletVersion": "v1.31.4+k3s1",
+          "osImage": "Ubuntu 24.04.1 LTS",
+          "kernelVersion": "6.8.0-51-generic",
+          "architecture": "amd64"
+        }
+      }
+    }
+  ]
+}
