@@ -273,6 +273,7 @@ def test_openapi_declares_every_http_route() -> None:
         "/credential-for",
         "/dns-chain",
         "/secret-describe",
+        "/reachable",
         "/health/live",
         "/health/ready",
         "/version",

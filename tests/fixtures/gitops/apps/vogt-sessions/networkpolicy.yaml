@@ -1,0 +1,105 @@
+# Copied from indexarr/ops apps/vogt-sessions/networkpolicy.yaml (includes the
+# tailnet :22 rule merged in ops PR #822). Test fixture for cadastre#71.
+# Default deny, both directions, for every pod in the namespace. k3s enforces
+# NetworkPolicy here (kube-router; clusters/estate/README.md). The agent in a
+# session pod calls back out to the engine (below); the engine reads the pod's
+# log stream through the API server, not pod network, so no ingress rule is
+# needed.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# Egress allowlist. NetworkPolicy has no hostnames, so the external hosts are
+# matched by port to the public internet with every private range excluded; see
+# README.md "Egress: what is and isn't enforced".
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: session-egress
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    # DNS (CoreDNS).
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+    # graft-dev (grpc).
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: graft-dev}}
+          podSelector: {matchLabels: {app: graft-dev}}
+      ports: [{port: 17888}]
+    # Garage S3 (kache build cache). This is the only Garage egress for
+    # session pods; the destination is namespace/pod scoped and TCP-only.
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: garage}}
+          podSelector: {matchLabels: {app: garage}}
+      ports: [{port: 3900}]
+    # The in-cluster vogt-dev engine (vogt WI-3167), on its Service port.
+    # This is also how a session pod's `workspace-config` init container
+    # fetches its read-only workspace snapshot (vogt WI-4127, port 8910):
+    # pod -> engine only. No repository egress and no repository credential
+    # is involved.
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: vogt-dev}}
+          podSelector: {matchLabels: {app: vogt-dev-engine}}
+      ports: [{port: 8910, protocol: TCP}]
+    # Node B: the Vogt engine's LAN endpoint, and Caddy (443) for
+    # repo.indexarr.net (Forgejo + registry) when it resolves to the LAN.
+    # 18197 is the engine's session-facing LAN port (WI-3154): /api/health,
+    # /api/agent-auth/* and /mcp.
+    - to:
+        - ipBlock: {cidr: 192.168.1.75/32}
+      ports:
+        - {port: 443, protocol: TCP}
+        - {port: 18197, protocol: TCP}  # engine LAN endpoint (WI-3154)
+        - {port: 4000, protocol: TCP}   # LiteLLM LAN bind (WI-3491)
+    # LiteLLM on Node B's tailnet address (WI-4067): the LAN bind 192.168.1.75:4000
+    # times out from the nodes while the tailnet address answers, so pods use
+    # this one. 443 is Caddy there: https://vogt.sprooty.com resolves to it, and
+    # the vogt-prod MCP bridge (vogt WI-4289) calls it. The public-443 rule below
+    # excludes 100.64.0.0/10, so it needs its own line.
+    - to:
+        - ipBlock: {cidr: 100.92.54.45/32}
+      ports:
+        - {port: 4000, protocol: TCP}
+        - {port: 443, protocol: TCP}    # Caddy: vogt.sprooty.com (WI-4289)
+    # The private Traefik VIP, for the Cadastre MCP front door at
+    # https://cadastre.int.sprooty.com (vogt WI-4121). The pod never reaches
+    # Cadastre's tailnet address directly; Traefik terminates the internal
+    # wildcard there and forwards to Node B. Destination is the one VIP.
+    - to:
+        - ipBlock: {cidr: 192.168.1.250/32}
+      ports: [{port: 443, protocol: TCP}]
+    # NetworkPolicy sees the destination after kube-proxy's DNAT, so the VIP rule
+    # above never matches: the packet is already addressed to a Traefik pod's
+    # websecure port. Allow that, or pods get "connection refused" (verified live
+    # 2026-11-14: curl from a pod to the VIP failed until this was allowed).
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: traefik}}
+      ports: [{port: 8443, protocol: TCP}]
+    # Public HTTPS: GitHub, api.anthropic.com, crates.io/static.crates.io,
+    # registry.npmjs.org, pypi.org/files.pythonhosted.org, pub.dev,
+    # maven.google.com/dl.google.com, repo.indexarr.net via its public address.
+    # GitHub SSH (22) for git over ssh.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10,
+                     169.254.0.0/16, 127.0.0.0/8]
+      ports: [{port: 443, protocol: TCP}, {port: 22, protocol: TCP}]
+    # Estate SSH (WI-4555): TCP 22 to the tailnet. The rule above excludes
+    # 100.64.0.0/10, so without this kube-router rejected tailnet :22 and ssh
+    # to every estate host failed with "Connection refused" before the host
+    # (and the tailnet ACL) was ever reached. Allowing the whole tailnet makes
+    # the tailnet ACL the real gate for which hosts a session may reach.
+    - to:
+        - ipBlock:
+            cidr: 100.64.0.0/10
+      ports: [{port: 22, protocol: TCP}]

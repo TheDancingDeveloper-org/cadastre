@@ -11,10 +11,12 @@ from __future__ import annotations
 from cadastre.mcp.sdk import (
     Action,
     EntityId,
+    FromContext,
     Hostname,
     Query,
     SecretRef,
     ServiceName,
+    Target,
 )
 
 
@@ -95,4 +97,23 @@ def secret_describe(ref: SecretRef) -> str:
     )
 
 
-ESTATE_TOOLS = (credential_for, dns_chain, secret_describe)
+def reachable(from_context: FromContext, to: Target) -> str:
+    """May a caller's network context reach ip:port? Evaluates the Kubernetes
+    NetworkPolicies declared in the GitOps (ops repo) source and returns allow
+    or deny with the policy and rule that decided it. Nothing is probed; the
+    tailnet ACL is not evaluated. Example:
+    reachable(from_context="k8s:vogt-sessions", to="100.92.54.45:22")."""
+    from cadastre.mcp import server
+
+    return server._answer(
+        lambda endpoint, token: server.client.request(
+            endpoint,
+            "/reachable",
+            query={"from_context": from_context, "to": to},
+            token=token,
+        ),
+        lambda: server._queries().reachable(from_context, to),
+    )
+
+
+ESTATE_TOOLS = (credential_for, dns_chain, secret_describe, reachable)
