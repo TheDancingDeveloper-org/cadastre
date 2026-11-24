@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any, cast
 
@@ -9,7 +10,7 @@ import pytest
 
 from cadastre.cli import reachable as reachable_cmd
 from cadastre.cli.session import Session
-from cadastre.core.errors import UsageError
+from cadastre.core.errors import MissingEntityError, UsageError
 from cadastre.core.netpol import Policy, evaluate_egress
 
 GITOPS = Path(__file__).parent / "fixtures" / "gitops"
@@ -103,7 +104,8 @@ def test_named_and_ranged_ports_and_label_dependent_selectors() -> None:
     [
         ("vogt-sessions", "100.92.54.45:22"),
         ("tailnet:node", "100.92.54.45:22"),
-        (CALLER, "winrarhost:22"),
+        (CALLER, ":22"),
+        (CALLER, "winrarhost:ssh"),
         (CALLER, "100.92.54.45"),
         (CALLER, "100.92.54.45:70000"),
     ],
@@ -126,6 +128,7 @@ def test_checkout_from_environment(
     class _Session:
         root = tmp_path
         plugins = _Plugins()
+        catalog = None
 
         def provenance(self) -> tuple[()]:
             return ()
@@ -148,6 +151,86 @@ def test_no_checkout_configured_is_a_usage_error(
     class _Session:
         root = tmp_path
         plugins = _Plugins()
+        catalog = None
 
     with pytest.raises(UsageError, match="CADASTRE_GITOPS_PATH"):
         reachable_cmd.reachable(cast(Session, _Session()), CALLER, "100.92.54.45:22")
+
+
+# --- host names (WI-4563): `to` resolves through the catalog's ids and aliases ---
+
+NODE_B_IP = "100.92.54.45"
+LAN_IP = "192.168.1.5"
+
+
+@pytest.fixture
+def estate(tmp_path: Path) -> Session:
+    """The example catalog with winrarhost an alias of node-b (tailnet IP) and
+    a LAN host with a LAN IP alias."""
+    import yaml
+
+    from tests.conftest import DECLARED_AS_OF, EXAMPLE_CATALOG, NOW
+
+    root = tmp_path / "estate"
+    shutil.copytree(EXAMPLE_CATALOG, root)
+    path = root / "declared" / "hosts" / "hosts.yaml"
+    entries = yaml.safe_load(path.read_text(encoding="utf-8"))
+    entries[0]["aliases"] = ["winrarhost", NODE_B_IP]
+    entries[1]["aliases"] = [LAN_IP]
+    path.write_text(yaml.safe_dump(entries, sort_keys=False), encoding="utf-8")
+    return Session.open(root, now=NOW, as_of=DECLARED_AS_OF)
+
+
+def _by_name(estate: Session, policies: list[Policy], to: str) -> Any:
+    return reachable_cmd.reachable_from_policies(
+        policies, CALLER, to, catalog=estate.catalog
+    )
+
+
+def test_host_alias_resolves_and_reports_the_address_used(
+    estate: Session, policies: list[Policy]
+) -> None:
+    for port in (22, 443):
+        document = _by_name(estate, policies, f"winrarhost:{port}")
+        assert document.data["decision"] == "allow"
+        assert document.data["address_used"] == NODE_B_IP
+        assert document.data["host"] == "winrarhost"
+        assert NODE_B_IP in document.data["to"]
+
+
+def test_host_id_resolves_too(estate: Session, policies: list[Policy]) -> None:
+    host_id = estate.catalog.find_by_alias("winrarhost")[0].id
+    data = _by_name(estate, policies, f"{host_id}:22").data
+    assert data["decision"] == "allow"
+    assert data["address_used"] == NODE_B_IP
+
+
+def test_lan_host_is_denied_citing_session_egress(
+    estate: Session, policies: list[Policy]
+) -> None:
+    lan_host = estate.catalog.find_by_alias(LAN_IP)[0].id
+    document = _by_name(estate, policies, f"{lan_host}:22")
+    assert document.data["decision"] == "deny"
+    assert document.data["address_used"] == LAN_IP
+    assert "session-egress" in document.data["reason"]
+    assert document.exit_code == 1
+
+
+def test_unknown_host_is_not_found_not_usage(
+    estate: Session, policies: list[Policy]
+) -> None:
+    with pytest.raises(MissingEntityError, match="no host 'nosuchhost'"):
+        _by_name(estate, policies, "nosuchhost:22")
+
+
+def test_host_without_an_ip_alias_is_not_found(
+    estate: Session, policies: list[Policy]
+) -> None:
+    bare = next(h.id for h in estate.catalog.hosts if not h.aliases)
+    with pytest.raises(MissingEntityError, match="no IP address"):
+        _by_name(estate, policies, f"{bare}:22")
+
+
+def test_a_name_needs_a_catalog(policies: list[Policy]) -> None:
+    with pytest.raises(UsageError, match="without a catalog"):
+        reachable_cmd.reachable_from_policies(policies, CALLER, "winrarhost:22")

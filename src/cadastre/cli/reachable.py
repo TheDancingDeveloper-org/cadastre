@@ -24,7 +24,9 @@ from typing import Any
 import yaml
 
 from cadastre.cli.session import Session
-from cadastre.core.errors import UsageError
+from cadastre.core.catalog import Catalog
+from cadastre.core.errors import AmbiguousEntityError, MissingEntityError, UsageError
+from cadastre.core.model import Host
 from cadastre.core.netpol import Policy, Verdict, evaluate_egress
 from cadastre.render.document import Bullets, Document, Fields, Para, Section, Table
 
@@ -53,24 +55,75 @@ def parse_caller(raw: str) -> str:
     return rest.strip()
 
 
-def parse_target(raw: str) -> tuple[ipaddress.IPv4Address | ipaddress.IPv6Address, int]:
+def parse_target(raw: str) -> tuple[str, int]:
+    """Split `to` into (host, port). The host is an IP or a catalog name."""
     text = (raw or "").strip()
     if text.startswith("["):
         host, _, port_text = text[1:].partition("]:")
     else:
         host, _, port_text = text.rpartition(":")
+    host = host.strip()
     try:
-        address = ipaddress.ip_address(host)
         port = int(port_text)
     except ValueError:
+        port = 0
+    if not host or not port_text.strip().isdigit():
         raise UsageError(
-            f"reachable needs `to` as <ip>:<port>, e.g. '100.92.54.45:22'; got "
-            f"{text!r}. NetworkPolicy matches addresses, not names — resolve "
-            "a hostname first (lookup or dns_chain)."
-        ) from None
+            f"reachable needs `to` as <host>:<port>, e.g. 'winrarhost:22' or "
+            f"'100.92.54.45:22'; got {text!r}"
+        )
     if not 0 < port < 65536:
         raise UsageError(f"port {port} is out of range")
-    return address, port
+    return host, port
+
+
+Address = ipaddress.IPv4Address | ipaddress.IPv6Address
+
+
+def _as_ip(text: str) -> Address | None:
+    try:
+        return ipaddress.ip_address(text)
+    except ValueError:
+        return None
+
+
+def resolve_host(catalog: Catalog | None, host: str) -> list[Address]:
+    """The addresses `host` stands for: itself if an IP, else a catalog host's
+    IP aliases (matched by host id, then by alias).
+
+    An unknown name is a MissingEntityError (not-found), not a usage error.
+    """
+    literal = _as_ip(host)
+    if literal is not None:
+        return [literal]
+    if catalog is None:
+        raise UsageError(
+            f"cannot resolve {host!r} without a catalog; give `to` as <ip>:<port>"
+        )
+    hosts = [e for kind, e in catalog.find(host) if isinstance(e, Host)]
+    if not hosts:
+        hosts = catalog.find_by_alias(host)
+    if not hosts:
+        raise MissingEntityError(
+            f"no host {host!r} in the catalog (looked up by id and alias); "
+            "use `lookup` to find the host or give an <ip>:<port>"
+        )
+    if len(hosts) > 1:
+        raise AmbiguousEntityError(
+            f"{host!r} is an alias of more than one host "
+            f"({', '.join(h.id for h in hosts)}); use the host id"
+        )
+    addresses: list[Address] = []
+    for alias in hosts[0].aliases:
+        ip = _as_ip(alias)
+        if ip is not None and ip not in addresses:
+            addresses.append(ip)
+    if not addresses:
+        raise MissingEntityError(
+            f"host {hosts[0].id!r} has no IP address among its aliases, so its "
+            "network reachability cannot be evaluated; add the address as an alias"
+        )
+    return addresses
 
 
 def gitops_checkout(session: Session) -> Path:
@@ -146,20 +199,47 @@ def load_policies(checkout: Path) -> list[Policy]:
 
 
 def reachable_from_policies(
-    policies: list[Policy], from_context: str, to: str, *, source: str = ""
+    policies: list[Policy],
+    from_context: str,
+    to: str,
+    *,
+    source: str = "",
+    catalog: Catalog | None = None,
 ) -> Document:
     namespace = parse_caller(from_context)
-    address, port = parse_target(to)
-    verdict = evaluate_egress(policies, namespace=namespace, address=address, port=port)
-    return _render(verdict, namespace, f"{address}:{port}", source)
+    host, port = parse_target(to)
+    addresses = resolve_host(catalog, host)
+    verdicts = [
+        (a, evaluate_egress(policies, namespace=namespace, address=a, port=port))
+        for a in addresses
+    ]
+    # Reachable if any address is allowed; that address is the one reported.
+    used, verdict = next(
+        ((a, v) for a, v in verdicts if v.decision == "allow"), verdicts[0]
+    )
+    named = _as_ip(host) is None
+    target = f"{host}:{port}" + (f" (via {used})" if named else "")
+    document = _render(verdict, namespace, target, source)
+    if named:
+        document.data["host"] = host
+        document.data["address_used"] = str(used)
+        document.data["addresses"] = [
+            {"address": str(a), "decision": v.decision} for a, v in verdicts
+        ]
+    return document
 
 
 def reachable(session: Session, from_context: str, to: str) -> Document:
     parse_caller(from_context)
-    parse_target(to)
+    host, _ = parse_target(to)
+    resolve_host(session.catalog, host)
     checkout = gitops_checkout(session)
     document = reachable_from_policies(
-        load_policies(checkout), from_context, to, source=str(checkout)
+        load_policies(checkout),
+        from_context,
+        to,
+        source=str(checkout),
+        catalog=session.catalog,
     )
     return Document(
         title=document.title,

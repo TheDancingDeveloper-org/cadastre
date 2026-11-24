@@ -98,11 +98,11 @@ def secret_describe(ref: SecretRef) -> str:
 
 
 def reachable(from_context: FromContext, to: Target) -> str:
-    """May a caller's network context reach ip:port? Evaluates the Kubernetes
-    NetworkPolicies declared in the GitOps (ops repo) source and returns allow
-    or deny with the policy and rule that decided it. Nothing is probed; the
-    tailnet ACL is not evaluated. Example:
-    reachable(from_context="k8s:vogt-sessions", to="100.92.54.45:22")."""
+    """May a caller's network context reach host:port (a catalog host name
+    or an IP)? Evaluates the Kubernetes NetworkPolicies declared in the
+    GitOps (ops repo) source and returns allow or deny with the policy and
+    rule that decided it. Nothing is probed; the tailnet ACL is not evaluated.
+    Example: reachable(from_context="k8s:vogt-sessions", to="winrarhost:22")."""
     from cadastre.mcp import server
 
     return server._answer(
