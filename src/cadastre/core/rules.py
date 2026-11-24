@@ -1206,6 +1206,18 @@ def check_catalog(catalog: Catalog) -> tuple[Finding, ...]:
                     fix="Name the principal explicitly.",
                 )
             )
+    for alias, host_ids in catalog.alias_claims().items():
+        findings.append(
+            Finding(
+                "error",
+                "host-alias-collision",
+                alias,
+                f"`{alias}` is claimed by more than one host.",
+                why="Claimed by " + ", ".join(host_ids) + ". Lookup cannot tell "
+                "which host an address or name means.",
+                fix="Remove the alias from all but the host it belongs to.",
+            )
+        )
     return tuple(
         sorted(
             findings,
