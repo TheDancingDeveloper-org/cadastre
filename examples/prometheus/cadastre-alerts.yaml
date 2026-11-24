@@ -1,5 +1,6 @@
 # Prometheus alert rules for Cadastre inventory sources (WI-4558).
-# Scrape GET /metrics with a read-scoped bearer token.
+# Scrape GET /metrics with a read-scoped bearer token; see scrape-config.yaml
+# for the scrape_config `authorization` block.
 groups:
   - name: cadastre-sources
     rules:

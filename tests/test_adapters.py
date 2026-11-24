@@ -46,12 +46,13 @@ def _raw_request(
     server: CadastreHTTPServer,
     method: str,
     path: str,
+    headers: dict[str, str] | None = None,
 ) -> tuple[int, str, bytes]:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
         connection = HTTPConnection("127.0.0.1", server.server_port, timeout=3)
-        connection.request(method, path)
+        connection.request(method, path, headers=headers or {})
         response = connection.getresponse()
         content_type = response.getheader("Content-Type", "")
         payload = response.read()
@@ -159,6 +160,52 @@ def test_http_read_surface_and_check_do_not_require_write_auth(
     assert status == 200
     assert result["command"] == "cadastre check compose-clean.yaml"
     assert result["result"]["artifact"]["path"] == "compose-clean.yaml"
+
+
+def test_http_metrics_requires_read_auth_and_serves_source_gauges(
+    catalog_copy: Path,
+) -> None:
+    from cadastre.core.observed import ObservedSource, write_source
+
+    write_source(
+        catalog_copy,
+        ObservedSource(
+            source="fixture",
+            plugin="fixture",
+            as_of="2020-01-01T00:00:00Z",
+            capabilities=("inventory.list",),
+        ),
+    )
+    tokens = {"read-token": credential("agent-runtime", scopes={READ_SCOPE})}
+    server = CadastreHTTPServer(
+        ("127.0.0.1", 0),
+        catalog_copy,
+        allow_write=False,
+        tokens=tokens,
+        require_auth=True,
+    )
+    status, _, raw_payload = _raw_request(server, "GET", "/metrics")
+    assert status == 403
+    assert b"cadastre_source_" not in raw_payload
+
+    server = CadastreHTTPServer(
+        ("127.0.0.1", 0),
+        catalog_copy,
+        allow_write=False,
+        tokens=tokens,
+        require_auth=True,
+    )
+    status, content_type, raw_payload = _raw_request(
+        server,
+        "GET",
+        "/metrics",
+        headers={"Authorization": "Bearer read-token"},
+    )
+    assert status == 200
+    assert content_type.startswith("text/plain")
+    body = raw_payload.decode()
+    assert "cadastre_source_overdue{" in body
+    assert "cadastre_source_stale{" in body
 
 
 def test_non_loopback_http_requires_explicit_read_auth(
