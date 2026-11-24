@@ -71,6 +71,8 @@ def _haystack(entity: model.Entity) -> list[str]:
             values.append(value)
             if attr == "ref":
                 values.append(value.rstrip("/").split("/")[-1])
+    if isinstance(entity, model.Host):
+        values.extend(alias for alias in entity.aliases if alias)
     return values
 
 

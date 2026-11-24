@@ -120,6 +120,30 @@ class Catalog:
             if ident in self.entities.get(kind, {})
         ]
 
+    def find_by_alias(self, ident: str) -> list[model.Host]:
+        """Hosts that answer to this name or address (case-insensitive).
+
+        Ids are matched first by `find`; this is the fallback for a name a host
+        is known by but does not own. More than one host means the catalog
+        itself is in conflict, which the write gate reports.
+        """
+        wanted = ident.casefold()
+        return [
+            host
+            for host in self.hosts
+            if any(alias.casefold() == wanted for alias in host.aliases)
+        ]
+
+    def alias_claims(self) -> dict[str, list[str]]:
+        """alias (casefolded) -> the host ids that claim it, where more than one."""
+        claims: dict[str, list[str]] = {}
+        for host in self.hosts:
+            for alias in set(host.aliases):
+                claims.setdefault(alias.casefold(), []).append(host.id)
+        return {
+            alias: sorted(ids) for alias, ids in sorted(claims.items()) if len(ids) > 1
+        }
+
     def location(self, kind: str, ident: str) -> Located | None:
         return self.locations.get((kind, ident))
 

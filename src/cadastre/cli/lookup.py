@@ -842,6 +842,16 @@ def lookup(session: Session, ident: str, *, kind: str | None = None) -> Document
     if ident.startswith(TAG_SELECTOR):
         return _tag_document(session, ident[len(TAG_SELECTOR) :], kind=kind)
     matches = session.catalog.find(ident)
+    if not matches:
+        # A host known by one of its aliases (hostname, tailnet name, IP).
+        # Ids win: an alias is only consulted when no entity owns the name.
+        aliased = session.catalog.find_by_alias(ident)
+        if len(aliased) > 1:
+            raise AmbiguousEntityError(
+                f"{ident!r} is an alias of more than one host "
+                f"({', '.join(h.id for h in aliased)}); look up the host id instead."
+            )
+        matches = [("host", host) for host in aliased]
     if kind:
         matches = [(k, e) for k, e in matches if k == kind]
     if not matches:

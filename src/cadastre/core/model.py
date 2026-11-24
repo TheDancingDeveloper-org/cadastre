@@ -95,6 +95,9 @@ class Host(Entity):
     reachable_from: tuple[str, ...] = ()
     resources: Resources | None = None
     access: tuple[Access, ...] = ()
+    #: Other names and addresses this host answers to: a tailnet or LAN name,
+    #: or an IP. Lookup matches them; two hosts may not claim the same one.
+    aliases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

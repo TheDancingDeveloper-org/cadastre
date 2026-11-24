@@ -148,6 +148,15 @@ ENTITY_SPECS: dict[str, EntitySpec] = {
             FieldSpec("reachable_from", "list[ref]", ref="network"),
             FieldSpec("resources", "obj", fields=RESOURCES, cls=model.Resources),
             FieldSpec("access", "list[obj]", fields=ACCESS, cls=model.Access),
+            FieldSpec(
+                "aliases",
+                "list[str]",
+                description=(
+                    "Other names or addresses this host answers to (hostname, "
+                    "tailnet name, LAN or tailnet IP). Lookup matches them; two "
+                    "hosts may not claim the same one."
+                ),
+            ),
         ),
     ),
     "network": EntitySpec(

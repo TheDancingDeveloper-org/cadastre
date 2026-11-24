@@ -103,6 +103,13 @@
               "role"
             ]
           }
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Other names or addresses this host answers to (hostname, tailnet name, LAN or tailnet IP). Lookup matches them; two hosts may not claim the same one."
         }
       },
       "required": [
