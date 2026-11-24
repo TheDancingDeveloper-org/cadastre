@@ -9,6 +9,14 @@ The version recorded here is `application_version` in
 `src/cadastre/release-compatibility.json`, which is attested to every released
 image as the schema-compatibility predicate.
 
+## Unreleased
+
+### Added
+
+- `infra-k3s` collector: k3s nodes as hosts, with roles, LAN and tailnet
+  addresses as aliases, Ready/disk/memory/PID pressure and capacity, read
+  through a read-only kubeconfig whose path comes from config (WI-4564, #72).
+
 ## v0.2.7
 
 ### Added
