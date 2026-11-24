@@ -275,6 +275,7 @@ def test_openapi_declares_every_http_route() -> None:
         "/secret-describe",
         "/health/live",
         "/health/ready",
+        "/metrics",
         "/version",
     }
     assert set(document["paths"]) == expected
