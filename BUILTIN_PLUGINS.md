@@ -36,6 +36,7 @@ interval renders as stale by design, so the two numbers belong to one decision.
 | `vpn-tailscale` | Tailscale API | `network.list`, `network.members` | network, host | devices read token | 1 day |
 | `hypervisor-proxmox` | Proxmox API | `inventory.list` | host | `PVEAuditor`-equivalent token | 1 day |
 | `hypervisor-hyperv` | Hyper-V host (read-only JSON inventory) | `inventory.list` | host | read-only inventory endpoint token | 1 day |
+| `infra-k3s` | Kubernetes API (k3s nodes) | `inventory.list` | host | read-only kubeconfig (path from config) | 1 day |
 | `registry-crates` | crates.io | `inventory.list` | `extra.published` | none | 1 day |
 | `work-markdown` † | local Markdown files | `work.findings` | markdown_finding | filesystem read | 1 hour |
 | `work-git` † | local Git checkout | `work.repo-state` | repo_checkout | filesystem read | 15 min |
@@ -53,9 +54,9 @@ drift; `result.extra` is retained verbatim as uninterpreted evidence and does
 not drive policy. Except for `static`, built-ins declare source authority,
 default `id` identity, reflected core fields, catalog annotations (`tags`,
 `notes`), `on_contest: exclude` for reflected fields, and `empty_expected: true`
-— except `hypervisor-proxmox`, whose `host` kind declares `empty_expected:
-false` because a hypervisor cannot truthfully report an empty inventory (see
-below).
+— except `hypervisor-proxmox` and `infra-k3s`, whose `host` kind declares
+`empty_expected: false` because a hypervisor or a cluster cannot truthfully
+report an empty inventory (see below).
 The current built-in declarations do not narrow coverage; configure `coverage`
 per source when an organisation/project/region source is not global.
 
@@ -568,6 +569,40 @@ no guests legitimately answers with an empty list, and the host is not itself an
 item in that list. This plugin therefore keeps the default `empty_expected:
 true` for `host`: zero guests is a credible reading of a fresh or emptied host,
 not evidence about the credential.
+
+## `infra-k3s`
+
+**Integration.** Use it for the nodes of a k3s (Kubernetes) cluster.
+`inventory.list` GETs `/api/v1/nodes` — the only call it makes — and emits each
+node as a `host` with `role: server`, its node name or `id_map` rename as the
+id, and capacity as `resources` (CPU cores, memory and ephemeral storage in GB).
+Config: `kubeconfig` (a file path) or `kubeconfig_env` (the name of the
+environment variable holding the path; default `K8S_AGENT_READONLY_KUBECONFIG`),
+`id_map`, `network`, and `timeout_seconds`. The kubeconfig's contents are never
+logged or placed in an error message; use a read-only service account. It has no
+mutation request and reads no Secrets, pods or workloads.
+
+```yaml
+- id: k3s
+  plugin: infra-k3s
+  command: [cadastre-plugin-infra-k3s]
+  methods: [inventory.list]
+  config:
+    kubeconfig_env: K8S_AGENT_READONLY_KUBECONFIG
+    network: lan
+```
+
+**What it reflects.** The node's `InternalIP`/`ExternalIP` addresses and
+hostnames become host `aliases`, so `lookup` finds a node by its LAN or tailnet
+address. Everything else rides in the `x-k3s` evidence block: `roles`
+(`control-plane`, `etcd`, `worker`; an unlabelled k3s agent is a `worker`),
+`ready`, `disk_pressure`, `memory_pressure`, `pid_pressure` (an `Unknown`
+condition is recorded as not ready / under pressure, never as healthy),
+`unschedulable`, pod capacity, and kubelet, OS, kernel and architecture.
+
+**An empty inventory is a fault.** A cluster always has a node, so zero nodes
+means the service account cannot list them; the plugin declares
+`empty_expected: false` for `host`.
 
 ## `registry-crates`
 

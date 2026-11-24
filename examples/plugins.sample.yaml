@@ -241,6 +241,16 @@ sources:
       hypervisor: hv-01
       network: lab-net
 
+  # 10b. k3s nodes, through a read-only kubeconfig. The env var holds the
+  #      file's path; the file itself is never read into logs or errors.
+  - id: k3s
+    plugin: infra-k3s
+    command: [cadastre-plugin-infra-k3s]
+    methods: [inventory.list]
+    config:
+      kubeconfig_env: K8S_AGENT_READONLY_KUBECONFIG
+      network: lab-net
+
   # 11. Publish state. No auth.
   - id: registry
     plugin: registry-crates

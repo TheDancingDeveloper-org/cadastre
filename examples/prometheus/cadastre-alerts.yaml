@@ -1,0 +1,18 @@
+# Prometheus alert rules for Cadastre inventory sources (WI-4558).
+# Scrape GET /metrics with a read-scoped bearer token; see scrape-config.yaml
+# for the scrape_config `authorization` block.
+groups:
+  - name: cadastre-sources
+    rules:
+      - alert: CadastreSourceStale
+        # Stale for more than 2x its TTL, or the collector keeps failing.
+        expr: cadastre_source_overdue == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cadastre source {{ $labels.source }} is overdue"
+          description: >-
+            {{ $labels.source }} ({{ $labels.plugin }}) has not been collected
+            successfully for more than twice its freshness TTL. See
+            `cadastre drift --category source-stale`.

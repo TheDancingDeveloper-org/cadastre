@@ -95,6 +95,13 @@ def openapi_schema(*, manifest_enabled: bool = False) -> dict[str, Any]:
             "/health/ready": {
                 "get": {"responses": {"200": {"description": "Readiness"}}}
             },
+            "/metrics": {
+                "get": {
+                    "responses": {
+                        "200": {"description": "Prometheus source freshness metrics"}
+                    }
+                }
+            },
         },
         "components": {
             "schemas": {
@@ -476,6 +483,21 @@ class _Handler(BaseHTTPRequestHandler):
                         summary_only=query.get("summary_only", [""])[0]
                         in ("1", "true", "yes"),
                     )
+                )
+            elif path == "/metrics":
+                from cadastre.core.source_health import assess, render_prometheus
+
+                session = context.service_session()
+                self._send_text(
+                    HTTPStatus.OK,
+                    "text/plain; charset=utf-8",
+                    render_prometheus(
+                        assess(
+                            session.observed,
+                            session.now,
+                            ttl_overrides=session.plugins.freshness,
+                        )
+                    ),
                 )
             elif path == "/stale":
                 self._call(service.stale())
