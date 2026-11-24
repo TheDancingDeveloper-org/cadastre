@@ -125,6 +125,13 @@ def build_parser(*, include_manifest: bool = False) -> argparse.ArgumentParser:
     )
     chain.add_argument("hostname", help='e.g. "app.example.com"')
 
+    reach = sub_parser(
+        "reachable",
+        "May a k8s namespace reach ip:port under its declared NetworkPolicies?",
+    )
+    reach.add_argument("from_context", help='e.g. "k8s:vogt-sessions"')
+    reach.add_argument("to", help='e.g. "100.92.54.45:22"')
+
     describe = sub_parser(
         "secret-describe", "A secret's location and value shape, never its value."
     )
@@ -679,6 +686,10 @@ def dispatch(args: argparse.Namespace) -> Document:
         from cadastre.cli import dns_chain as dns_chain_cmd
 
         return dns_chain_cmd.dns_chain(session, args.hostname)
+    if args.command == "reachable":
+        from cadastre.cli import reachable as reachable_cmd
+
+        return reachable_cmd.reachable(session, args.from_context, args.to)
     if args.command == "secret-describe":
         from cadastre.cli import secret_describe as describe_cmd
 

@@ -91,6 +91,7 @@ def test_streamable_initialize_list_and_call(catalog_copy: Path) -> None:
         "credential_for",
         "dns_chain",
         "secret_describe",
+        "reachable",
         "drift",
         "question",
         "observations",

@@ -49,6 +49,9 @@ ARGUMENT_DESCRIPTIONS: dict[str, str] = {
     "ref": "A secret reference (scheme://project/env/KEY), a catalog id, or "
     "a bare key name.",
     "question_id": "One of the documented migration question ids.",
+    "from_context": "The caller's network context, e.g. 'k8s:vogt-sessions' "
+    "(k8s:<namespace>).",
+    "to": "The destination as <ip>:<port>, e.g. '100.92.54.45:22'.",
 }
 
 #: A ready call per operation, quoted in the error a malformed call receives.
@@ -59,6 +62,7 @@ OPERATION_EXAMPLES: dict[str, str] = {
     "credential_for": '{"service": "komodo", "action": "deploy"}',
     "dns_chain": '{"hostname": "app.example.com"}',
     "secret_describe": '{"ref": "infisical://apps/prod/API_KEY"}',
+    "reachable": '{"from_context": "k8s:vogt-sessions", "to": "100.92.54.45:22"}',
     "question": '{"question_id": "<id>", "subject": "<entity>"}',
 }
 
@@ -75,6 +79,9 @@ ARGUMENT_ALIASES: dict[tuple[str, str], str] = {
     ("secret_describe", "name"): "ref",
     ("secret_describe", "secret"): "ref",
     ("check", "content"): "artifact",
+    ("reachable", "from"): "from_context",
+    ("reachable", "source"): "from_context",
+    ("reachable", "target"): "to",
 }
 
 
@@ -194,6 +201,13 @@ MCP_OPERATIONS: tuple[Operation, ...] = (
         "catalog.read",
         arguments=("ref",),
         required_arguments=("ref",),
+    ),
+    # Kubernetes NetworkPolicy egress from the GitOps source; nothing probed.
+    Operation(
+        "reachable",
+        "catalog.read",
+        arguments=("from_context", "to"),
+        required_arguments=("from_context", "to"),
     ),
     Operation(
         "drift",
@@ -365,6 +379,13 @@ HTTP_ROUTES: tuple[Operation, ...] = (
         route="/secret-describe",
         request_fields=("ref",),
         required_request_fields=("ref",),
+    ),
+    Operation(
+        "reachable",
+        "catalog.read",
+        route="/reachable",
+        request_fields=("from_context", "to"),
+        required_request_fields=("from_context", "to"),
     ),
     Operation("drift", "catalog.read", route="/drift"),
     Operation(

@@ -29,6 +29,7 @@ def test_it_exposes_exactly_the_documented_tools() -> None:
         "credential_for",
         "dns_chain",
         "secret_describe",
+        "reachable",
         "drift",
         "question",
         "observations",
