@@ -1,0 +1,14 @@
+# Prometheus scrape job for Cadastre GET /metrics (WI-4558).
+# /metrics is behind the same read auth as the other reads, so the scrape
+# must send a read-scoped bearer token. Keep the token in a file readable
+# only by Prometheus; do not inline it here.
+# Replace the target with your Cadastre HTTP address.
+scrape_configs:
+  - job_name: cadastre
+    metrics_path: /metrics
+    scheme: http
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/cadastre-read-token
+    static_configs:
+      - targets: ["cadastre.example:8080"]
