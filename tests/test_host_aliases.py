@@ -19,7 +19,8 @@ from cadastre.cli.search import search
 from cadastre.cli.session import Session
 from cadastre.core import model
 from cadastre.core.errors import AmbiguousEntityError, MissingEntityError
-from cadastre.core.rules import check_catalog
+from cadastre.core.observed import ObservedSource
+from cadastre.core.rules import RuleContext, check_catalog, host_name_conflict
 from tests.conftest import DECLARED_AS_OF, EXAMPLE_CATALOG, NOW
 
 LAN_IP = "192.168.1.10"
@@ -103,3 +104,65 @@ def test_a_catalog_without_shared_aliases_passes_the_gate(tmp_path: Path) -> Non
     assert not [
         f for f in check_catalog(session.catalog) if f.code == "host-alias-collision"
     ]
+
+
+def test_an_alias_equal_to_another_hosts_id_is_a_write_gate_error(
+    tmp_path: Path,
+) -> None:
+    session = _aliased_estate(tmp_path, {"app-02": ["app-01"]})
+    findings = [
+        f for f in check_catalog(session.catalog) if f.code == "host-alias-shadows-id"
+    ]
+    assert len(findings) == 1
+    assert findings[0].level == "error"
+    assert findings[0].subject == "app-01"
+
+
+TAILNET_IP = "100.92.54.45"
+
+
+def _dns_naming(address: str, name: str) -> ObservedSource:
+    return ObservedSource(
+        source="dns",
+        plugin="dns-cloudflare",
+        as_of="2026-11-24T00:00:00Z",
+        capabilities=("dns.list",),
+        entities={
+            "domain": [
+                model.Domain(id="rec-1", zone="example.test", name=name, value=address)
+            ]
+        },
+    )
+
+
+def _name_conflicts(session: Session, source: ObservedSource) -> list[str]:
+    context = RuleContext(
+        catalog=session.catalog,
+        artifact=None,  # type: ignore[arg-type]
+        observed=(source,),
+    )
+    return [f.subject for f in host_name_conflict(context)]
+
+
+def test_dns_naming_an_address_differently_from_the_host_is_reported(
+    tmp_path: Path,
+) -> None:
+    """WI-4560: DNS says 100.92.54.45 is winrarhost; ops says it is node-b."""
+    session = _aliased_estate(tmp_path, {"app-01": [TAILNET_IP]})
+    assert _name_conflicts(session, _dns_naming(TAILNET_IP, "winrarhost")) == [
+        "winrarhost"
+    ]
+
+
+def test_declaring_the_name_as_an_alias_clears_the_conflict(tmp_path: Path) -> None:
+    session = _aliased_estate(
+        tmp_path,
+        {"app-01": [TAILNET_IP, "winrarhost", "winrarhost.tailc7d3c.ts.net"]},
+    )
+    for name in ("winrarhost", "Winrarhost.tailc7d3c.ts.net.", "app-01"):
+        assert _name_conflicts(session, _dns_naming(TAILNET_IP, name)) == []
+
+
+def test_an_address_no_host_claims_is_not_a_conflict(tmp_path: Path) -> None:
+    session = _aliased_estate(tmp_path, {"app-01": [TAILNET_IP]})
+    assert _name_conflicts(session, _dns_naming("10.9.9.9", "winrarhost")) == []

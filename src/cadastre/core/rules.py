@@ -1151,11 +1151,54 @@ def grant_wildcard(context: RuleContext) -> Iterable[Finding]:
 # ---------------------------------------------------------------------------
 
 
+def host_name_conflict(context: RuleContext) -> Iterable[Finding]:
+    """An observed record names a host's address with a name the host lacks.
+
+    The owner of an address is the declared host that lists it as an alias. A
+    DNS A/AAAA record (or any observed domain) pointing at that address under
+    a name that is neither the host's id nor one of its aliases is a
+    cross-source disagreement: declare the name as an alias, or fix the record.
+    """
+    for source in context.observed:
+        if not source.ok:
+            continue
+        for entity in source.entities.get("domain", []):
+            if not isinstance(entity, model.Domain) or not entity.value:
+                continue
+            if entity.type.upper() not in {"A", "AAAA"}:
+                continue
+            for host in context.catalog.find_by_alias(entity.value):
+                known = {host.id.casefold(), *(a.casefold() for a in host.aliases)}
+                name = entity.name.rstrip(".").casefold()
+                if name in known:
+                    continue
+                yield Finding(
+                    level="warn",
+                    code="host-name-conflict",
+                    subject=entity.name,
+                    message=(
+                        f"{source.source} names {entity.value} `{entity.name}`, "
+                        f"but the catalog says it is host `{host.id}`."
+                    ),
+                    why=(
+                        f"`{entity.name}` is neither `{host.id}` nor one of its "
+                        "aliases, so the two sources disagree about this address."
+                    ),
+                    fix=(
+                        f"If it is the same machine, add `{entity.name}` to the "
+                        f"aliases of `{host.id}`; otherwise correct the record."
+                    ),
+                )
+
+
 def run(context: RuleContext) -> list[Finding]:
     """Every rule, in registration order. Findings are stable across runs."""
     findings: list[Finding] = []
     for _code, func in RULES:
         findings.extend(func(context))
+    # Estate-wide like `check_catalog`: not tied to the proposed artifact, so
+    # it is not a registered artifact rule.
+    findings.extend(host_name_conflict(context))
     order = {"error": 0, "warn": 1, "info": 2}
     return sorted(findings, key=lambda f: (order.get(f.level, 3), f.code, f.subject))
 
@@ -1218,6 +1261,22 @@ def check_catalog(catalog: Catalog) -> tuple[Finding, ...]:
                 fix="Remove the alias from all but the host it belongs to.",
             )
         )
+    for host in catalog.hosts:
+        for alias in sorted(set(host.aliases)):
+            for other in catalog.hosts:
+                if other.id != host.id and other.id.casefold() == alias.casefold():
+                    findings.append(
+                        Finding(
+                            "error",
+                            "host-alias-shadows-id",
+                            alias,
+                            f"`{alias}` is an alias of `{host.id}` and the id of "
+                            f"`{other.id}`.",
+                            why="Lookup resolves it to the id, so the alias "
+                            "silently means a different machine.",
+                            fix="Remove the alias or rename one of the hosts.",
+                        )
+                    )
     return tuple(
         sorted(
             findings,
