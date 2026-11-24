@@ -470,6 +470,13 @@ class _Handler(BaseHTTPRequestHandler):
                 self._call(service.dns_chain(query.get("hostname", [""])[0]))
             elif path == "/secret-describe":
                 self._call(service.secret_describe(query.get("ref", [""])[0]))
+            elif path == "/reachable":
+                self._call(
+                    service.reachable(
+                        query.get("from_context", [""])[0],
+                        query.get("to", [""])[0],
+                    )
+                )
             elif path == "/drift":
                 self._call(service.drift())
             elif path == "/observations":

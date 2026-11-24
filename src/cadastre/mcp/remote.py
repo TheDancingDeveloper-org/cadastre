@@ -15,12 +15,14 @@ from cadastre.mcp.sdk import (
     Action,
     ArtifactPath,
     EntityId,
+    FromContext,
     Hostname,
     HostRef,
     Intent,
     Query,
     SecretRef,
     ServiceName,
+    Target,
 )
 
 MCP_URL_ENV = "CADASTRE_MCP_URL"
@@ -155,6 +157,9 @@ def build_server() -> Any:
     def secret_describe(ref: SecretRef) -> str:
         return _remote_tool("secret_describe", {"ref": ref})
 
+    def reachable(from_context: FromContext, to: Target) -> str:
+        return _remote_tool("reachable", {"from_context": from_context, "to": to})
+
     def drift(
         category: str | None = None,
         kind: str | None = None,
@@ -286,6 +291,7 @@ def build_server() -> Any:
         credential_for,
         dns_chain,
         secret_describe,
+        reachable,
         drift,
         question,
         observations,

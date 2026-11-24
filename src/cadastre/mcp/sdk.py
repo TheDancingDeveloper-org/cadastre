@@ -36,6 +36,8 @@ Action = Annotated[str | None, Field(description=_DESCRIPTIONS["action"])]
 Hostname = Annotated[str, Field(description=_DESCRIPTIONS["hostname"])]
 HostRef = Annotated[str, Field(description=_DESCRIPTIONS["host"])]
 SecretRef = Annotated[str, Field(description=_DESCRIPTIONS["ref"])]
+FromContext = Annotated[str, Field(description=_DESCRIPTIONS["from_context"])]
+Target = Annotated[str, Field(description=_DESCRIPTIONS["to"])]
 
 
 def error_kind(exc: Exception) -> str:

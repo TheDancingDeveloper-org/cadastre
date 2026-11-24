@@ -92,6 +92,11 @@ class QueryService:
 
         return secret_describe.secret_describe(self._session(), ref)
 
+    def reachable(self, from_context: str, to: str) -> Document:
+        from cadastre.cli import reachable
+
+        return reachable.reachable(self._session(), from_context, to)
+
     def drift(self, **filters: Any) -> Document:
         return drift.drift(self._session(), **filters)
 
@@ -199,6 +204,9 @@ class QueryService:
             "dns_chain": lambda: self.dns_chain(str(values.get("hostname") or "")),
             "secret_describe": lambda: self.secret_describe(
                 str(values.get("ref") or "")
+            ),
+            "reachable": lambda: self.reachable(
+                str(values.get("from_context") or ""), str(values.get("to") or "")
             ),
             "drift": lambda: self.drift(
                 **{
