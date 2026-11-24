@@ -77,6 +77,11 @@ class QueryService:
 
         return search.credential_for(self._session(), service, action)
 
+    def access(self, host: str) -> Document:
+        from cadastre.cli import access
+
+        return access.access(self._session(), host)
+
     def dns_chain(self, hostname: str) -> Document:
         from cadastre.cli import dns_chain
 
@@ -190,6 +195,7 @@ class QueryService:
             "credential_for": lambda: self.credential_for(
                 str(values.get("service") or ""), values.get("action")
             ),
+            "access": lambda: self.access(str(values.get("host") or "")),
             "dns_chain": lambda: self.dns_chain(str(values.get("hostname") or "")),
             "secret_describe": lambda: self.secret_describe(
                 str(values.get("ref") or "")

@@ -11,8 +11,10 @@ it (DESIGN §3.2).
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import Any
 
+from cadastre.cli.access import access as access_answer
 from cadastre.cli.lookup import lookup
 from cadastre.cli.session import Session
 from cadastre.core.errors import AmbiguousEntityError, MissingEntityError
@@ -52,6 +54,19 @@ def _led_by_access_verb(words: list[str]) -> bool:
     return False
 
 
+def _with_access(session: Session, document: Document, name: str) -> Document:
+    """Add the access answer when the one thing resolved is a declared host."""
+    try:
+        answer = access_answer(session, name)
+    except (AmbiguousEntityError, MissingEntityError):
+        return document
+    return replace(
+        document,
+        sections=document.sections + answer.sections,
+        data={**document.data, "access": answer.data},
+    )
+
+
 def _access_document(session: Session, intent: str) -> Document | None:
     """Answer an access intent about existing entities, never placement.
 
@@ -65,11 +80,13 @@ def _access_document(session: Session, intent: str) -> Document | None:
     words = re.findall(r"[a-z0-9][a-z0-9._-]*", text)
     names = list(dict.fromkeys(w for w in words if w not in _ACCESS_FILLER))
     matched: list[Document] = []
+    resolved_names: list[str] = []
     ambiguous: list[str] = []
     missing: list[str] = []
     for name in names:
         try:
             matched.append(lookup(session, name))
+            resolved_names.append(name)
         except AmbiguousEntityError:
             ambiguous.append(name)
         except MissingEntityError:
@@ -77,7 +94,7 @@ def _access_document(session: Session, intent: str) -> Document | None:
     if not matched and not ambiguous and not _led_by_access_verb(words):
         return None
     if len(matched) == 1 and not ambiguous and not missing:
-        return matched[0]
+        return _with_access(session, matched[0], resolved_names[0])
     sections: list[Section] = [
         Section(
             "Interpreted as",

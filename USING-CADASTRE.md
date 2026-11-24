@@ -66,6 +66,7 @@ runtime stores.
 | `lookup <id>` | Show one entity and its relationships. `lookup tag:<tag>` lists declared entities carrying a tag. |
 | `search <words>` | Rank declared and observed entities and secrets by words (MCP: `lookup(query=...)`). |
 | `credential-for <service> [action]` | Rank the secret(s) needed to act on a service, with project id and a manifest line. |
+| `access <host>` | How to connect to a host (id or alias): login user, credential reference and manifest line, path (network, address, tailnet/LAN), Tailscale SSH, skill. Facts the catalog does not declare are listed under Missing, never guessed. The user, Tailscale SSH and skill come from host tags `ssh-user:NAME`, `tailscale-ssh` and `skill:NAME`; the credential is a secret whose id or reference carries the host id. |
 | `dns-chain <hostname>` | Check record -> ingress edge -> node -> service from collected evidence. |
 | `secret-describe <ref>` | A secret's location, value shape, version, and consumers — never its value. |
 | `question <id>` | Answer one explicit operational migration question. |

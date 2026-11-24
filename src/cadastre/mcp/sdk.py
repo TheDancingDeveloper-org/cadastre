@@ -34,6 +34,7 @@ Query = Annotated[str | None, Field(description=_DESCRIPTIONS["query"])]
 ServiceName = Annotated[str, Field(description=_DESCRIPTIONS["service"])]
 Action = Annotated[str | None, Field(description=_DESCRIPTIONS["action"])]
 Hostname = Annotated[str, Field(description=_DESCRIPTIONS["hostname"])]
+HostRef = Annotated[str, Field(description=_DESCRIPTIONS["host"])]
 SecretRef = Annotated[str, Field(description=_DESCRIPTIONS["ref"])]
 
 

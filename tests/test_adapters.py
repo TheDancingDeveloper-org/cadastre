@@ -270,6 +270,7 @@ def test_openapi_declares_every_http_route() -> None:
         "/acknowledge",
         "/question",
         "/search",
+        "/access",
         "/credential-for",
         "/dns-chain",
         "/secret-describe",

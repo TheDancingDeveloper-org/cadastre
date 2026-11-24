@@ -46,6 +46,7 @@ ARGUMENT_DESCRIPTIONS: dict[str, str] = {
     "action": "What you want to do with the service, e.g. 'deploy', 'read', "
     "'ssh', 'push'. Optional; ranks candidates.",
     "hostname": "A fully qualified hostname, e.g. 'app.example.com'.",
+    "host": "A host id or alias (hostname, tailnet name, IP), e.g. 'app-01'.",
     "ref": "A secret reference (scheme://project/env/KEY), a catalog id, or "
     "a bare key name.",
     "question_id": "One of the documented migration question ids.",
@@ -57,6 +58,7 @@ OPERATION_EXAMPLES: dict[str, str] = {
     "check": '{"artifact": "<compose file text>", "kind": "compose"}',
     "lookup": '{"query": "komodo api key"} or {"entity_id": "node-b"}',
     "credential_for": '{"service": "komodo", "action": "deploy"}',
+    "access": '{"host": "app-01"}',
     "dns_chain": '{"hostname": "app.example.com"}',
     "secret_describe": '{"ref": "infisical://apps/prod/API_KEY"}',
     "question": '{"question_id": "<id>", "subject": "<entity>"}',
@@ -180,6 +182,12 @@ MCP_OPERATIONS: tuple[Operation, ...] = (
         "catalog.read",
         arguments=("service", "action"),
         required_arguments=("service",),
+    ),
+    Operation(
+        "access",
+        "catalog.read",
+        arguments=("host",),
+        required_arguments=("host",),
     ),
     Operation(
         "dns_chain",
@@ -351,6 +359,13 @@ HTTP_ROUTES: tuple[Operation, ...] = (
         route="/credential-for",
         request_fields=("service", "action"),
         required_request_fields=("service",),
+    ),
+    Operation(
+        "access",
+        "catalog.read",
+        route="/access",
+        request_fields=("host",),
+        required_request_fields=("host",),
     ),
     Operation(
         "dns_chain",

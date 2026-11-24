@@ -47,3 +47,9 @@ def test_every_named_host_is_resolved_or_reported(session: Session) -> None:
     assert document.data["matched"] is not None
     assert document.data["missing"] == ["nosuchhost"]
     assert "candidates" not in document.data
+
+
+def test_single_host_answer_carries_the_access_answer(session: Session) -> None:
+    document = context_for(session, "ssh into app-01")
+    assert document.data["access"]["host"] == "app-01"
+    assert any(s.title == "Credential" for s in document.sections)

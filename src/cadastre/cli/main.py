@@ -120,6 +120,11 @@ def build_parser(*, include_manifest: bool = False) -> argparse.ArgumentParser:
     credential.add_argument("service", help='e.g. "komodo"')
     credential.add_argument("action", nargs="?", default=None, help='e.g. "deploy"')
 
+    access = sub_parser(
+        "access", "How to connect to a host: user, credential, path, skill."
+    )
+    access.add_argument("host", help='A host id or alias, e.g. "app-01"')
+
     chain = sub_parser(
         "dns-chain", "Check record -> ingress edge -> node -> service for a name."
     )
@@ -675,6 +680,10 @@ def dispatch(args: argparse.Namespace) -> Document:
                 session, args.query, kind=args.kind, limit=args.limit
             )
         return search_cmd.credential_for(session, args.service, args.action)
+    if args.command == "access":
+        from cadastre.cli import access as access_cmd
+
+        return access_cmd.access(session, args.host)
     if args.command == "dns-chain":
         from cadastre.cli import dns_chain as dns_chain_cmd
 
