@@ -20,6 +20,7 @@ from cadastre.core.drift import (
     unobservable,
 )
 from cadastre.core.errors import UsageError
+from cadastre.core.source_health import assess
 from cadastre.core.topology import drift as topology_drift
 from cadastre.render.document import Document, Para, Section, Table
 
@@ -35,6 +36,11 @@ _EXPLANATION = {
     "differs": (
         "Both sides know about it and disagree. The declared value is the "
         "intent; the observed value is what is running."
+    ),
+    "source-stale": (
+        "A source has not been collected for more than twice its freshness "
+        "TTL, or its collector keeps failing. Its evidence, and every answer "
+        "that rests on it, is aging. Fix the collector or retire the source."
     ),
     "secret-only-in": (
         "A reference exists in one store and not the other. Names only — no "
@@ -119,6 +125,20 @@ def drift(
     if not isinstance(summary_only, bool):
         raise UsageError("drift summary_only must be a boolean")
     divergences = compare(session.catalog, list(session.observed))
+    divergences += [
+        Divergence(
+            category="source-stale",
+            kind="source",
+            id=health.source,
+            source=health.source,
+            observed=health.reason(),
+        )
+        for health in assess(
+            session.observed, session.now, ttl_overrides=session.plugins.freshness
+        )
+        if health.alerting
+    ]
+    divergences.sort(key=Divergence.sort_key)
     filters = {
         "category": category,
         "kind": kind,
@@ -162,7 +182,13 @@ def drift(
                 ),
             )
         )
-    for category in ("undeclared", "missing", "differs", "secret-only-in"):
+    for category in (
+        "undeclared",
+        "missing",
+        "differs",
+        "secret-only-in",
+        "source-stale",
+    ):
         rows = grouped.get(category)
         if not rows:
             continue
