@@ -29,52 +29,115 @@ _ACCESS_FILLER = {
     "ssh", "sftp", "scp", "connect", "reach", "access", "log", "login", "in",
     "into", "to", "onto", "shell", "rdp", "console", "the", "a", "an", "host",
     "server", "service", "machine", "box", "node", "via", "from", "how", "do",
-    "i", "can", "me", "my", "please", "want", "need", "should", "using", "with",
+    "i", "can", "me", "my", "and", "or", "please", "want", "need", "should",
+    "using", "with",
 }  # fmt: skip
 
 
-def _access_document(session: Session, intent: str) -> Document | None:
-    """Answer an access-verb intent about an existing entity, never placement.
+def _led_by_access_verb(words: list[str]) -> bool:
+    """True when the first non-filler-prefix word is an access verb.
 
-    Returns None when the intent has no access verb, so placement proceeds.
+    "how do I ssh into x" and "ssh into x" lead with the verb; "deploy a public
+    service with ssh access" does not (its first content word is "deploy").
+    """
+    verbs = {"ssh", "sftp", "scp", "connect", "reach", "access", "login", "shell",
+             "rdp", "console", "log"}  # fmt: skip
+    lead = {"how", "do", "i", "can", "me", "my", "please", "want", "need", "to",
+            "should", "the", "a", "an"}  # fmt: skip
+    for word in words:
+        if word in verbs:
+            return True
+        if word not in lead:
+            return False
+    return False
+
+
+def _access_document(session: Session, intent: str) -> Document | None:
+    """Answer an access intent about existing entities, never placement.
+
+    An intent is access when an access verb leads it, or when it contains an
+    access verb and names an entity that resolves. Otherwise returns None so
+    placement proceeds ("deploy a service with ssh access" is placement).
     """
     text = intent.lower()
     if not _ACCESS_VERBS.search(text):
         return None
-    words = [w for w in re.findall(r"[a-z0-9][a-z0-9._-]*", text)]
-    names = [w for w in words if w not in _ACCESS_FILLER]
+    words = re.findall(r"[a-z0-9][a-z0-9._-]*", text)
+    names = list(dict.fromkeys(w for w in words if w not in _ACCESS_FILLER))
+    matched: list[Document] = []
+    ambiguous: list[str] = []
+    missing: list[str] = []
     for name in names:
         try:
-            return lookup(session, name)
-        except (MissingEntityError, AmbiguousEntityError) as error:
-            if isinstance(error, AmbiguousEntityError):
-                raise
-    return Document(
-        title=f"cadastre context-for {intent}",
-        sections=(
-            Section(
-                "Interpreted as",
-                (
-                    Para(
-                        "An access request for an existing host or service. "
-                        "No placement candidates are offered for it."
-                    ),
+            matched.append(lookup(session, name))
+        except AmbiguousEntityError:
+            ambiguous.append(name)
+        except MissingEntityError:
+            missing.append(name)
+    if not matched and not ambiguous and not _led_by_access_verb(words):
+        return None
+    if len(matched) == 1 and not ambiguous and not missing:
+        return matched[0]
+    sections: list[Section] = [
+        Section(
+            "Interpreted as",
+            (
+                Para(
+                    "An access request for an existing host or service. "
+                    "No placement candidates are offered for it."
                 ),
             ),
+        )
+    ]
+    if matched:
+        sections.append(
+            Section(
+                "Resolved",
+                (Bullets(tuple(doc.title for doc in matched)),),
+            )
+        )
+    if ambiguous:
+        sections.append(
+            Section(
+                "Ambiguous",
+                (
+                    Para(
+                        "These names match more than one entity kind; qualify "
+                        "them (e.g. `host:NAME`): " + ", ".join(ambiguous)
+                    ),
+                ),
+            )
+        )
+    if missing:
+        sections.append(
             Section(
                 "Not found",
                 (
                     Para(
                         "No catalog or observed entity matches: "
-                        + (", ".join(names) or "(no name in the intent)")
+                        + ", ".join(missing)
                         + ". If it should exist, the catalog is wrong; say so "
                         "rather than assuming a name."
                     ),
                 ),
-            ),
-        ),
+            )
+        )
+    elif not names:
+        sections.append(
+            Section("Not found", (Para("No name in the intent to look up."),))
+        )
+    return Document(
+        title=f"cadastre context-for {intent}",
+        sections=tuple(sections),
         provenance=session.provenance(),
-        data={"intent": intent, "access": True, "matched": None, "names": names},
+        data={
+            "intent": intent,
+            "access": True,
+            "matched": [doc.data for doc in matched] or None,
+            "ambiguous": ambiguous,
+            "missing": missing,
+            "names": names,
+        },
     )
 
 

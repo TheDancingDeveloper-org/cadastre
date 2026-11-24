@@ -29,3 +29,21 @@ def test_unknown_host_does_not_fall_back_to_placement(session: Session) -> None:
 def test_placement_intent_unchanged(session: Session) -> None:
     document = context_for(session, "stateful public service")
     assert "candidates" in document.data
+
+
+def test_placement_with_access_word_still_places(session: Session) -> None:
+    for intent in (
+        "deploy a public service with ssh access",
+        "new stateful service, console access for admins",
+    ):
+        document = context_for(session, intent)
+        assert "candidates" in document.data, intent
+        assert "access" not in document.data
+
+
+def test_every_named_host_is_resolved_or_reported(session: Session) -> None:
+    document = context_for(session, "ssh into app-01 and nosuchhost")
+    assert document.data["access"] is True
+    assert document.data["matched"] is not None
+    assert document.data["missing"] == ["nosuchhost"]
+    assert "candidates" not in document.data
