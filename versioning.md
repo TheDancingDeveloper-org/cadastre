@@ -116,7 +116,7 @@ Three things sit outside it:
 - **An ungated second publish path.** `.github/workflows/publish.yml` runs on
   every push to `main`, holds `packages: write`, pushes via
   `docker/build-push-action` to `ghcr.io/<owner>/cadastre:sha-<sha>` and
-  `:main`, and then deploys to Komodo. It has no cosign, no SBOM, no
+  `:main`, and then deployed to Komodo (retired 2026-11-27). It has no cosign, no SBOM, no
   `release-gates.sh`, and no tag gate. `test_mirror_ci_cannot_publish_or_deploy`
   asserts exactly these properties are absent — but it only reads
   `.github/workflows/ci.yaml`, so `publish.yml` slips past the guard entirely.

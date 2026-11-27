@@ -110,14 +110,14 @@ def build_parser(*, include_manifest: bool = False) -> argparse.ArgumentParser:
     lookup.add_argument("--kind", default=None, help="Disambiguate a shared id.")
 
     search = sub_parser("search", "Find entities and secrets by words.")
-    search.add_argument("query", help='e.g. "komodo api key"')
+    search.add_argument("query", help='e.g. "infisical api key"')
     search.add_argument("--kind", default=None, help="Only this entity kind.")
     search.add_argument("--limit", type=int, default=None)
 
     credential = sub_parser(
         "credential-for", "Which secret(s) acting on a service needs."
     )
-    credential.add_argument("service", help='e.g. "komodo"')
+    credential.add_argument("service", help='e.g. "forgejo"')
     credential.add_argument("action", nargs="?", default=None, help='e.g. "deploy"')
 
     access = sub_parser(

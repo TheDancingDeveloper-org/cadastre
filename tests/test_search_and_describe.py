@@ -38,6 +38,8 @@ AS_OF = "2026-08-07T11:55:00Z"
 #: deploy-#49 shape; the second is single-line JSON.
 FAKE_MULTILINE = "Zq9#Xk!V3pQ\nLmT7@wR2sJd\r\nQ8&yH4^nB6\nVv0%Tt5"
 FAKE_JSON = '{"k9Qzw":"Wv7Lx2NpRr"}'
+# Fixture data only: HOMELAB_KOMODO_* are historical credential names (Komodo
+# retired 2026-11-27) used to exercise secret search; nothing contacts Komodo.
 FAKE_KOMODO = "kmd_9fJ2xQ7vLp3Rz8Tw"
 
 APPS_PAYLOAD: dict[str, list[dict[str, Any]]] = {
@@ -271,7 +273,7 @@ def test_search_falls_back_to_source_configuration_for_the_project(
 
 
 def test_search_without_words_says_what_it_needs(session: Session) -> None:
-    with pytest.raises(UsageError, match="komodo api key"):
+    with pytest.raises(UsageError, match="infisical api key"):
         search(session, "  ")
 
 
@@ -322,7 +324,7 @@ def test_tool_schemas_describe_their_arguments() -> None:
     schema = operation_for_mcp("lookup").input_schema()
     assert schema["required"] == []
     query = schema["properties"]["query"]["anyOf"][0]
-    assert "komodo api key" in query["description"]
+    assert "infisical api key" in query["description"]
     intent = operation_for_mcp("context_for").input_schema()
     assert intent["required"] == ["intent"]
     assert "description" in intent["properties"]["intent"]
