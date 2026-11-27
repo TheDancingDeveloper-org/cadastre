@@ -17,8 +17,8 @@ guest without a running agent simply has no addresses, and never fails the
 collection.
 
 Guests are linked to other sources by id: a guest's Proxmox name is its host
-id, which is what the tailnet collector uses too (and the retired Komodo collector did). Where the names
-differ, `config.id_map` renames a Proxmox name to the catalog id.
+id, which is what the tailnet collector uses too (and the retired Komodo collector
+did). Where the names differ, `config.id_map` renames a Proxmox name to the catalog id.
 """
 
 from __future__ import annotations
