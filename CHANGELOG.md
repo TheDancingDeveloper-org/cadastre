@@ -11,6 +11,12 @@ image as the schema-compatibility predicate.
 
 ## Unreleased
 
+### Changed
+
+- Komodo was retired 2026-11-27. Cadastre has no Komodo collector; docs and examples
+  that mention it are labelled historical, and the usage examples no longer use
+  Komodo credential names. `collect --exit-code` is tested to exit 0 without one.
+
 ### Added
 
 - `infra-k3s` collector: k3s nodes as hosts, with roles, LAN and tailnet

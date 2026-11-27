@@ -291,7 +291,7 @@ No vendor nouns in the core model.
 | `ci_pool.selectors` | `runs-on` / `runner_group` |
 
 Vendor-shaped facts that do not fit the core model live in a **namespaced
-attribute block** — `x-komodo.stack_id`, `x-tailscale.acl_tag` — validated by a
+attribute block** — `x-tailscale.acl_tag` (and, historically, `x-komodo.stack_id`) — validated by a
 JSON-Schema fragment the plugin ships (§4.2).
 
 The rule that makes this safe: **core logic reads core fields only.** Placement,
@@ -490,7 +490,7 @@ Cadastre has two extension points and they are not interchangeable.
 ```
      plugins  ──▶  [ core: model · policy · storage · check ]  ◀──  adapters
     (data in)                                                    (access out)
-  static, exec, komodo,                                    cli · mcp · http · gui
+  static, exec, gitops,                                    cli · mcp · http · gui
   tailscale, dns, ci, …
 ```
 
@@ -672,8 +672,8 @@ invisible.
 
 ### 4.1 One concept
 
-An integration is a **plugin**. There is no second word for it: Komodo is a
-plugin, Tailscale is a plugin, `static` is a plugin. "Provider" is retired as a
+An integration is a **plugin**. There is no second word for it: Tailscale is a
+plugin (Komodo was one until it was retired, 2026-11-27); Tailscale is a plugin, `static` is a plugin. "Provider" is retired as a
 separate concept — an out-of-process plugin is a plugin that happens to be an
 executable.
 

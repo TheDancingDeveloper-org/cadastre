@@ -34,8 +34,8 @@ API:  GET  $CADASTRE_HTTP_URL/brief
 When you have words rather than an id, search instead of guessing one:
 
 ```text
-MCP:  lookup(query="komodo api key")          # ranked candidates
-      credential_for(service="komodo", action="deploy")
+MCP:  lookup(query="infisical api key")          # ranked candidates
+      credential_for(service="forgejo", action="deploy")
       secret_describe(ref="NAME")             # shape and location, no value
       dns_chain(hostname="app.example.com")   # record -> edge -> node
 ```

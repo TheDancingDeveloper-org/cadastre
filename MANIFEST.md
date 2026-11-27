@@ -219,7 +219,7 @@ src/cadastre/
     work_markdown.py            TODO/PLAN/STATUS/BACKLOG findings
     work_git.py                 local checkout state; never fetches
     work_github.py              issues, pull requests, Projects v2, revision checks
-    orchestrator_komodo.py      read-only stack and server state
+    orchestrator_komodo.py      HISTORICAL, never shipped: Komodo retired 2026-11-27
   cli/  api/  mcp/              conditional adapters over one query service
 ```
 
@@ -266,6 +266,11 @@ approved:
 | `artifact_build` | source | `(repository, revision, OCI digest)` | Proves which immutable artifact a revision produced |
 | `deployment_spec` | source | `(source repo, path, unit)` | Records the image and orchestrator target requested by GitOps |
 | `runtime_deployment` | source | `(orchestrator instance, upstream stack id)` | Records actual stack, target host, revision, units, image digests, state, and deployment event time |
+
+> **Historical note (2026-11-27):** Komodo was retired (core, mongo and all
+> peripheries removed). The Komodo-specific text below, `orchestrator-komodo`
+> and `x-komodo.*`, is kept as design history only. No Komodo collector exists
+> in this repository and none runs.
 
 The previous `(server, stack_name)` proposal is rejected: both placement and a
 display name can change. For Komodo, the emitted Cadastre id is derived from the
@@ -318,7 +323,7 @@ exact revision comparison, not proof of ahead or unpushed work. It emits
 Dirty state includes tracked changes and untracked paths but retains neither
 file bodies nor diffs.
 
-`orchestrator-komodo` is an ordinary read-only plugin using only `/read/`
+_Historical (Komodo retired 2026-11-27; not implemented):_ `orchestrator-komodo` was to be an ordinary read-only plugin using only `/read/`
 operations — initially `ListStacks`, `GetStack`, `ListServers`, and bounded
 `ListUpdates`. Komodo uses POST requests for typed read operations, so safety is
 enforced by an operation-name allowlist rather than by pretending HTTP POST is
@@ -972,7 +977,7 @@ proves the worker and forge write credential are absent.
 **Done when:** model, schema, identity, authority, refusal, and proof-state tests
 cover every kind and no vendor field is read by core logic.
 
-#### D02 — implement `orchestrator-komodo`
+#### D02 — implement `orchestrator-komodo` (HISTORICAL: cancelled, Komodo retired 2026-11-27)
 
 **Depends on:** D01.
 

@@ -1,7 +1,7 @@
 """`cadastre search` and `credential-for` — find things without knowing their id.
 
 `lookup` addresses one entity by id. Agents mostly do not have an id: they
-have "the komodo api key" or "whatever deploys to komodo". Every one of 27
+have "the infisical api key" or "whatever deploys to forgejo". Every one of 27
 logged `lookup` failures was a caller passing a phrase where an id was
 required, and the fallback was a manual login to the secret store — exactly
 the bypass this catalog exists to make unnecessary.
@@ -281,7 +281,7 @@ def search(
     if not wanted:
         raise UsageError(
             "search needs a query of at least one word of two or more "
-            "characters, e.g. 'komodo api key'"
+            "characters, e.g. 'infisical api key'"
         )
     cap = _limit(limit)
     ranked: list[tuple[float, int, Hit, str]] = []
@@ -416,7 +416,7 @@ def credential_for(
     service_tokens = [token for token in tokens(service or "") if len(token) >= 2]
     if not service_tokens:
         raise UsageError(
-            "credential_for needs `service` (a service name such as 'komodo'); "
+            "credential_for needs `service` (a service name such as 'forgejo'); "
             "`action` is optional, e.g. 'deploy'"
         )
     hints = _action_tokens(action)

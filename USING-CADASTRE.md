@@ -82,14 +82,14 @@ candidates across declared and observed entities, merging a declared secret
 with the collector's observation of the same reference:
 
 ```text
-MCP:  lookup(query="komodo api key")
-      credential_for(service="komodo", action="deploy")
+MCP:  lookup(query="infisical api key")
+      credential_for(service="forgejo", action="deploy")
       dns_chain(hostname="app.example.com")
-      secret_describe(ref="HOMELAB_KOMODO_API_KEY")
+      secret_describe(ref="HOMELAB_INFISICAL_API_KEY")
 API:  GET /search?query=komodo+api+key
-      GET /credential-for?service=komodo&action=deploy
+      GET /credential-for?service=forgejo&action=deploy
       GET /dns-chain?hostname=app.example.com
-      GET /secret-describe?ref=HOMELAB_KOMODO_API_KEY
+      GET /secret-describe?ref=HOMELAB_INFISICAL_API_KEY
 ```
 
 Every secret hit carries `store`, `project_id`, `project_slug`,
