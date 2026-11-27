@@ -28,7 +28,7 @@ def lookup(
     limit: int | None = None,
 ) -> str:
     """Look up one entity by exact `entity_id`, or search by words with
-    `query` (e.g. lookup(query="komodo api key")) and get ranked candidates.
+    `query` (e.g. lookup(query="infisical api key")) and get ranked candidates.
     Give one of the two. Secret hits carry store, project id, environment,
     path, server and a ready agent-auth manifest line — never a value."""
     from cadastre.mcp import server
@@ -52,7 +52,7 @@ def lookup(
 
 def credential_for(service: ServiceName, action: Action = None) -> str:
     """Which secret(s) you need to act on a service, e.g.
-    credential_for(service="komodo", action="deploy"). Ranked candidates with
+    credential_for(service="forgejo", action="deploy"). Ranked candidates with
     store, project id, server and a ready agent-auth manifest line; never a
     value. Use it before logging in to a secret store by hand."""
     from cadastre.mcp import server
@@ -104,7 +104,7 @@ def secret_describe(ref: SecretRef) -> str:
     """Describe a secret without its value: project slug and id, environment,
     path, server, value length, newline/CR counts, whether it parses as JSON,
     version, updated_at and known consumers. Accepts a reference, catalog id
-    or bare key name, e.g. secret_describe(ref="HOMELAB_KOMODO_API_KEY")."""
+    or bare key name, e.g. secret_describe(ref="HOMELAB_INFISICAL_API_KEY")."""
     from cadastre.mcp import server
 
     return server._answer(

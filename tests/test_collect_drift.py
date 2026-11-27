@@ -60,6 +60,17 @@ def test_collect_writes_observed(catalog_copy: Path) -> None:
     assert {h.id for h in sources[0].entities["host"]} == {"app-01", "app-99"}
 
 
+def test_collect_exits_zero_with_no_komodo_source(catalog_copy: Path) -> None:
+    """Komodo was retired 2026-11-27. No source contacts it, and a collection
+    with only non-Komodo sources must still exit 0 (`collect --exit-code`)."""
+    _configure(catalog_copy)
+    text = (catalog_copy / "declared" / "plugins.yaml").read_text().lower()
+    assert "komodo" not in text
+    document = collect(_session(catalog_copy), exit_code=True)
+    assert document.exit_code == 0
+    assert document.data["failed"] == []
+
+
 def test_collect_never_writes_to_declared(catalog_copy: Path) -> None:
     _configure(catalog_copy)
     before = {

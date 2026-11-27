@@ -69,7 +69,7 @@ class QueryService:
 
         raise UsageError(
             "lookup needs `entity_id` (an exact id, e.g. 'node-b') or `query` "
-            "(free text, e.g. 'komodo api key')"
+            "(free text, e.g. 'infisical api key')"
         )
 
     def credential_for(self, service: str, action: str | None = None) -> Document:

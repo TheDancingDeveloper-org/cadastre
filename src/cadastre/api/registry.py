@@ -41,8 +41,8 @@ ARGUMENT_DESCRIPTIONS: dict[str, str] = {
     "entity_id": "An exact entity id, e.g. 'node-b'. Use `query` instead "
     "when you only have words.",
     "query": "Free text over ids, names, addresses and secret references, "
-    "e.g. 'komodo api key'. Returns ranked candidates.",
-    "service": "A service name, e.g. 'komodo'.",
+    "e.g. 'infisical api key'. Returns ranked candidates.",
+    "service": "A service name, e.g. 'forgejo'.",
     "action": "What you want to do with the service, e.g. 'deploy', 'read', "
     "'ssh', 'push'. Optional; ranks candidates.",
     "hostname": "A fully qualified hostname, e.g. 'app.example.com'.",
@@ -59,8 +59,8 @@ ARGUMENT_DESCRIPTIONS: dict[str, str] = {
 OPERATION_EXAMPLES: dict[str, str] = {
     "context_for": '{"intent": "deploy a public web service"}',
     "check": '{"artifact": "<compose file text>", "kind": "compose"}',
-    "lookup": '{"query": "komodo api key"} or {"entity_id": "node-b"}',
-    "credential_for": '{"service": "komodo", "action": "deploy"}',
+    "lookup": '{"query": "infisical api key"} or {"entity_id": "node-b"}',
+    "credential_for": '{"service": "forgejo", "action": "deploy"}',
     "access": '{"host": "app-01"}',
     "dns_chain": '{"hostname": "app.example.com"}',
     "secret_describe": '{"ref": "infisical://apps/prod/API_KEY"}',
